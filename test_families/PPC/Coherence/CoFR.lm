@@ -1,0 +1,15 @@
+platform ppc
+initial {mem[x]=0}
+
+P0:
+{r20="NOP", r21=b}
+    a: stw r20, 0(r21)
+
+P1:
+{r21=b,r22=0}
+    b: B end
+    lwz r22, 0(r21)
+    end: nop
+
+//  "B end" = 1207959560
+exists {1:r22=1207959560}

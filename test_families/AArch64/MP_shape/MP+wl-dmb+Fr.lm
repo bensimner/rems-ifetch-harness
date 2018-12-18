@@ -1,0 +1,15 @@
+initial {mem[x]=0}
+
+P0:
+{x0=2, x1=x, w2="NOP", x3=c}
+    a: str x0, [x1]
+    dmb st
+    b: str w2, [x3]
+
+P1:
+{x0=1, x3=x}
+    c: B end
+    d: ldr x0, [x3]
+    end: NOP
+
+exists {1:x0=0}

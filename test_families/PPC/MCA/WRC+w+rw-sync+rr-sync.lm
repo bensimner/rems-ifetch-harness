@@ -1,0 +1,19 @@
+platform ppc
+initial {mem[x]=0,mem[y]=0}
+
+P0:
+{r20=1, r21=y}
+    STW r20, 0(r21)
+
+P1:
+{r20=1, r21=y, r22=x, r24=0}
+    lwz r24, 0(r21)
+    stw r20, 0(r22)
+
+P2:
+{r21=y, r22=x, r23=0, r24=0}
+    lwz r23, 0(r22)
+    sync
+    lwz r24, 0(r21)
+
+exists {1:r24=1, 2:r23=1, 2:r24=0}

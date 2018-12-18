@@ -1,0 +1,21 @@
+platform ppc
+initial {mem[x]=0}
+
+P0:
+{r20="NOP", r21=b}
+    a: stw r20, 0(r21)
+
+P1:
+{r21=b,r22=0, r23=0, r24=0}
+    bl b
+    mr r23, r24
+    bl b
+    b end
+    b: B fail_b
+    li r24, 1
+    B over
+    fail_b: li r24, 0
+    over: bclr 20,0,0
+    end: nop
+
+exists {1:r23=1, 1:r24=0}

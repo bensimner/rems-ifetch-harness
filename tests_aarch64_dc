@@ -1,0 +1,8 @@
+// Tests for the DC instruction
+
+// DC global?
+test_families/AArch64/SM_shape/SM+RW+RW.lm allowed?
+test_families/AArch64/SM_shape/SM+RWRW.lm forbidden?
+
+// DC wait for fully-determined po-previous addresses?
+test_families/AArch64/WRC_shape/WRC+l+rw-addr+rrrF-addr-dcic-dsbisb.lm forbidden?

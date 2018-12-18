@@ -1,0 +1,18 @@
+platform ppc
+
+initial {mem[x]=0,mem[y]=0}
+
+P0:
+{r7=x,r9=y}
+    li r8, 1
+    stw r8,0(r7)
+    li r10, 1
+    stw r10,0(r9)
+
+
+P1:
+{r7=x,r9=y}
+    lwz r8,0(r9)
+    lwz r10,0(r7)
+
+exists {1:r8=1, 1:r10=0}

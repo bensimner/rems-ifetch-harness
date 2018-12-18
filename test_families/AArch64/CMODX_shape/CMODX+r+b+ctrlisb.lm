@@ -1,0 +1,38 @@
+init {mem[x]=0}
+
+P0:
+{w0="NOP"}
+    NOP
+    NOP
+    NOP
+    NOP
+    NOP
+    NOP
+    NOP
+    NOP
+    NOP
+    NOP
+    ADR x1, x
+    STR w0, [X1]
+
+P1:
+{x0=0, x1=x}
+    BL x
+    B end
+    x: B over
+    MOV X0, #2
+    B store
+    over: MOV X0, #1
+    store: STR x0, [x1]
+    RET
+    end: NOP
+
+P2:
+{x0=0, x1=x}
+    PRFM PLIL2KEEP, x
+    LDR x2, [x1]
+    CBNZ x2, L
+    L: ISB
+    BL x
+
+exists {1:x0=2, 2:x0=1, 2:x2=2}

@@ -1,0 +1,22 @@
+test_families/AArch64/MP_shape/MP+ww+rr.lm 1000 10 allowed
+test_families/AArch64/MP_shape/MP+ww-dmb+rr-ctrl.lm 1000 10 allowed
+test_families/AArch64/MP_shape/MP+ww-dmb+rr-dmbld.lm 1000 10 forbidden
+
+test_families/AArch64/MP_shape/MP+lw+rF.lm 10000 1000 allowed
+test_families/AArch64/MP_shape/MP+lw-dmb+rF.lm 10000 1000 allowed
+test_families/AArch64/MP_shape/MP+lw-dmb+rF-ctrlisb.lm 10000 1000 allowed
+test_families/AArch64/MP_shape/MP+lw-ic+rF-ctrlisb.lm 10000 1000 allowed
+test_families/AArch64/MP_shape/MP+lw-dsbic+rF-ctrlisb.lm 10000 1000 allowed
+test_families/AArch64/MP_shape/MP+lw-dcic+rF.lm 10000 1000 allowed
+test_families/AArch64/MP_shape/MP+lw-dcic+rF-isb.lm 10000 1000 allowed
+test_families/AArch64/MP_shape/MP+lw-dcic+rF-ctrlisb.lm 10000 1000 forbidden
+
+test_families/AArch64/MP_shape/MP+wl+Fr.lm 10000 1000 allowed
+test_families/AArch64/MP_shape/MP+wl-dmb+Fr.lm 10000 1000 allowed
+test_families/AArch64/MP_shape/MP+wl-dmb+Fr-isb.lm 10000 1000 forbidden?
+
+test_families/AArch64/MP_shape/MP+ll+FF.lm 1000 10 allowed
+test_families/AArch64/MP_shape/MP+ll-dmb+FF.lm 1000 10 allowed
+test_families/AArch64/MP_shape/MP+ll-ic+FF.lm 1000 10 allowed
+test_families/AArch64/MP_shape/MP+ll-dsbic+FF.lm 1000 10 allowed
+test_families/AArch64/MP_shape/MP+ll-dcic+FF.lm 1000 10 forbidden

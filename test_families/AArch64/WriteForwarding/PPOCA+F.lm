@@ -1,0 +1,33 @@
+platform aarch64
+initial {mem[x]=1,mem[y]=1}
+
+// 3107979653 = LDR w5, [x12]
+P0:
+{x9=x, x10=y}
+    MOV x0, #2
+    STR x0, [x9]
+    dmb st
+    MOV x1, #2
+    STR x1, [x10]
+
+P1:
+{x2=0, w5=0, x9=x, x10=y, w11=3107979653}
+    LDR x0, [x10]
+    EOR x1, x0, x0
+    CBZ x1, L
+    L: adr x12, z
+    str w11, [x12]
+    nop
+    dc cvau, x12
+    nop
+    ic ivau, x12
+    nop
+    isb
+    z: nop
+    cbz w5, end
+    isb
+    eor w3, w5, w5
+    ldr x2, [x9, x3]
+    end: nop
+
+exists {1:x0=2, 1:w5=3107979653, 1:x2=1}

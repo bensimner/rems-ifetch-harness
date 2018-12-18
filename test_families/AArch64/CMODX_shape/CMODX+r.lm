@@ -1,0 +1,25 @@
+init {Mx=0}
+
+P0:
+// 35..4000 = MOV X0, #1
+{w0=3531604000}
+    ADR x1, x
+    STR w0, [X1]
+
+P1:
+{x0=0, x1=&Mx}
+    BL x
+    B end
+    x: MOV X0, #2
+    STR x0, [x1]
+    RET
+    end: NOP
+
+P2:
+{x0=0, x1=&Mx}
+    LDR x2, [x1]
+    CBNZ x2, L
+    L: NOP // ISB
+    BL x
+
+exists {1:x0=1, 2:x0=2, 2:x2=1}

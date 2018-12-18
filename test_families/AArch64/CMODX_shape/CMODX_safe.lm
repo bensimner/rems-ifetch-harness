@@ -1,0 +1,14 @@
+P0:
+{w2=<NOP>}
+    ADR x1, x
+    STR w2, [X1]
+
+P1:
+{x0=0, x1=0}
+    x: B over
+    MOV X1, #2
+    b end
+    over: MOV X1, #0 
+    end: nop
+
+exists {1:x0=0, 1:x1=2}

@@ -1,0 +1,16 @@
+platform ppc
+
+P0:
+{r20="NOP", r21=d, r22="NOP", r23=c}
+    a: stw r20, 0(r21)
+    b: stw r22, 0(r23)
+
+P1:
+{r20=0, r21=0}
+    c: B d
+    li r20, 1
+    d: B end
+    li r21, 1
+    end: nop
+
+exists {1:r20=1, 1:r21=0}

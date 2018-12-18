@@ -1,0 +1,37 @@
+tag 
+initial {mem[y]=0, mem[z]=0}
+
+P0:
+{w0="NOP", x1=d}
+    STR w0, [x1]
+
+
+P1:
+{w0=0, x1=d, x2=1, x3=y}
+    LDR w0, [x1]
+    EOR w0, w0, w0
+    STR x2, [x3, x0]
+
+P2:
+{x0=0, x1=y, x2=0, x3=z, x4=d, x5=1}
+    LDR x0, [x1]
+    EOR x0, x0, x0
+    LDR x2, [x3, x0]
+    DC CVAU, x4
+    DSB ISH
+    IC IVAU, x4
+    DSB ISH
+    ISB
+    d: B fail_d
+    b end
+    fail_d: mov x5, #0
+    end: NOP
+
+exists {1:w0="NOP", 2:x0=1, 2:x5=0}
+
+// P0: W d="NOP"
+// P1: R d="NOP"; ADDR-DEP; W y=1
+// P2: R y=1; R z=0; DC d; IC d; ISB; d: ?old?
+// Forbidden because `DC d` waits for `R z` to be fully determined
+// to know it wasn't to the same address.
+// (Because DC waits for loads to addresses in same cache line)

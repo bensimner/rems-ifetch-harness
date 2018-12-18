@@ -1,0 +1,20 @@
+// P0
+//  W x="NOP" | R y=1
+//  dmb       | (fetch-order)
+//  W y=1     | F x=¬NOP
+//
+
+P0:
+{w2=<NOP>}
+    ADR x3, x
+    STR w2, [X3]
+
+P1:
+{x0=0}
+    x: B over
+    MOV X0, #1
+    B end
+    over: MOV X1, #2
+    end: NOP
+
+exists {1:x0=1, 1:x1=2}

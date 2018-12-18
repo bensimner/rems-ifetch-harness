@@ -1,0 +1,21 @@
+initial {mem[z]=0}
+
+P0:
+{w0="NOP", x1=b}
+    a: str w0, [x1]
+
+P1:
+{x0=0, x1=z}
+    b: B end
+    mov x0, #1
+    c: str x0, [x1]
+    end: nop
+
+P2:
+{x0=0, x1=z, w3=0, x4=b}
+    d: ldr x2, [x1]
+    dmb sy
+    e: ldr w3, [x4]
+
+// 335544323 = b: B end
+exists {2:x2=1, 1:x0=1, 2:w3=335544323}

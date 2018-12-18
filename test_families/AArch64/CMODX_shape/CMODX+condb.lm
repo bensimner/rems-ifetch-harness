@@ -1,0 +1,19 @@
+P0:
+// 3036676224 = CBNZ x0, f
+{w2=3036676224}
+    ADR x3, x
+    STR w2, [X3]
+
+P1:
+{x0=0, x1=0}
+    x: CBZ x0, t
+    b end
+    t:
+        mov x1, #1
+        b end
+    f:
+        mov x1, #2
+        b end
+    end: NOP
+
+exists {1:x1=2}

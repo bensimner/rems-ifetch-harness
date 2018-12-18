@@ -1,0 +1,10 @@
++tests_aarch64_dicoherence
++tests_aarch64_idcoherence
+
+test_families/AArch64/WRC_shape/WRC+l+Fw+rr-ctrlisb.lm 10000 1000 forbidden
+test_families/AArch64/WRC_shape/WRC+l+Fw+rr-dmb.lm 10000 1000 forbidden
+test_families/AArch64/WRC_shape/WRC+l+Fw+rF.lm 10000 1000 allowed
+test_families/AArch64/WRC_shape/WRC+l+Fw+rF-ctrlisb.lm 10000 1000 forbidden
+test_families/AArch64/WRC_shape/WRC+l+Fl+FF.lm 1000 10 allowed
+test_families/AArch64/Coherence/MP+lw-dcic+wF-co.lm 1000 10 forbidden?
+test_families/AArch64/CoRR_shape/CoRR+w+FF.lm 1000 10 forbidden?

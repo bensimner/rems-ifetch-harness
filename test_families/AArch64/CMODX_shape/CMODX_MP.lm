@@ -1,0 +1,21 @@
+init {Mr=0}
+
+P0:
+// 35..4000 = MOV X0, #1
+{w2=3531604000, x3=&Mr}
+    ADR x1, x
+    STR w2, [X1]
+    dc cvau, x1
+    dsb ish
+    ic ivau, x1
+    dsb ish
+    mov x0, #1
+    str x0, [x3]
+
+P1:
+{x0=0, x1=0, x3=&Mr}
+    p1_loop: ldr x2, [x3]
+    cbz x2, p1_loop
+    x: MOV X1, #2
+
+exists {1:x0=0, 1:x1=2}

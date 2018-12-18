@@ -1,0 +1,22 @@
+platform ppc
+initial {mem[x]=0}
+
+P0:
+{r20="NOP", r21=b}
+    a: STW r20, 0(r21)
+
+P1:
+{r20=1, r22=x}
+    b: b end
+    c: stw r20, 0(r22)
+    end: nop
+
+P2:
+{r22=x, r27=b}
+    d: lwz r26, 0(r22)
+    cmpw r26, r26
+    bne LC00
+    LC00: isync
+    e: lwz r28, 0(r27)
+
+exists {2:r26=1, 2:r28=0}

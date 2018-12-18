@@ -1,0 +1,15 @@
+platform ppc
+
+P0:
+{r20="NOP", r21=b}
+    a: stw r20, 0(r21)
+
+P1:
+{r21=b,r22=0, r23=0}
+    lwz r22, 0(r21)
+    isync
+    b: B end
+    li r23, 1
+    end: nop
+
+exists {1:r22="NOP", 1:r23=0}

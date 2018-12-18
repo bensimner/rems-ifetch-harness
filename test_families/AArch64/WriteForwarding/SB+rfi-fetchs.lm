@@ -1,0 +1,25 @@
+P0:
+{w0=<NOP>, w1=0}
+    ADR x9, l0
+    ADR x10, l1
+    STR w0, [x9]
+    dc cvau, x9
+    ic ivau, x9
+    isb
+    l0: b end0
+    isb
+    end0: ldr w1, [x10, x3]
+
+P1:
+{w0=<NOP>, w1=0}
+    ADR x9, l1
+    ADR x10, l0
+    STR w0, [x9]
+    dc cvau, x9
+    ic ivau, x9
+    isb
+    l1: b end1
+    isb
+    end1: ldr w1, [x10, x3]
+
+exists {0:w1=335544321, 1:w1=335544321}

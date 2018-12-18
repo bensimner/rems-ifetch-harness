@@ -1,0 +1,22 @@
+P0:
+{w0="NOP", x1=d, w2="NOP", x3=c}
+    a: str w0, [x1]
+    dmb st
+    b: str w2, [x3]
+
+P1:
+{x0=0, x1=0}
+    c: B dbl
+    mov x0, #1
+    dbl: BL d
+    end: nop
+
+// aka .text:
+P2:
+    b end3
+    d: B endd
+    mov x1, #1
+    endd: RET
+    end3: nop
+
+exists {1:x0=1, 1:x1=0}

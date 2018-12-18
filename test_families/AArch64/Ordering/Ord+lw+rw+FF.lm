@@ -1,0 +1,19 @@
+initial {mem[x]=0}
+
+P0:
+{w0="NOP", x1=f, x2=1, x3=x}
+    STR w0, [x1]
+    STR x2, [x3]
+
+P1:
+{x0=0, x1=x, w2="NOP", x3=e}
+    LDR x0, [x1]
+    STR w2, [x3]
+
+P2:
+{x0=0, x1=0}
+    e: B f
+    mov x0, #1
+    f: B end
+    mov x1, #1
+    end: nop

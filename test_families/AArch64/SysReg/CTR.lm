@@ -1,0 +1,10 @@
+P0:
+    MRS x0, CTR_EL0
+    RBIT x0, x0
+    TST x0, 4
+    CSET x1, NE
+    TST x0, 8
+    CSET x2, NE
+
+// x1=DIC, x2=IDC
+exists {0:x1=0, 0:x2=0}

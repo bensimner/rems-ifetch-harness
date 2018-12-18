@@ -1,0 +1,21 @@
+initial {mem[x]=0,mem[y]=0,mem[z]=0}
+
+P0:
+{x9=y,x10=z}
+    mov w0, #1
+    str w0, [x10]
+    dmb st
+    mov w1, #2
+    str w1, [x9]
+
+P1:
+{w0=0, w1=0, w2=0, w3=0, w4=0, w5=0, x8=x,x9=y,x10=z}
+    ldr w0, [x9]
+    eor x1, x0, x0
+    ldr w2, [x8, x1]
+    ldr w3, [x8]
+    eor x4, x3, x3
+    ldr w5, [x10, x4]
+
+
+exists {1:w0=2, 1:w2=0, 1:w3=0, 1:w5=0}

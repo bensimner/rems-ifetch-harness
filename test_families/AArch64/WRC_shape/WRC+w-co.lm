@@ -1,0 +1,27 @@
+initial {mem[z]=0}
+
+P0:
+{w0="NOP"}
+    ADR x2, a
+    LDR w1, [x2]
+    dmb sy
+    STR w0, [x2]
+
+P1:
+{x1=z}
+    a: B end
+    MOV x0, #1
+    STR x0, [x1]
+    b end
+    end: nop
+
+P2:
+{x0=0, x1=z}
+    L: LDR x2, [x1]
+    CBZ x2, over2
+    ADR x3, a
+    MOV w4, #42
+    STR w4, [x3]
+    over2: nop
+
+exists {2:x2=1, 0:w1=42}

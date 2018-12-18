@@ -1,0 +1,34 @@
+initial {mem[x]=0, mem[y]=0}
+
+P0:
+{w0="NOP", x1=f, x2=1, x3=x}
+    a: STR w0, [x1]
+    DC CVAU, x1
+    DSB ISH
+    IC IVAU, x1
+    DSB ISH
+    b: STR x2, [x3]
+
+P1:
+{x0=2, x1=x, x2=1, x3=y}
+    c: STR x0, [x1]
+    dmb st
+    d: STR x2, [x3]
+
+P2:
+{x0=0, x1=y, x2=1}
+    e: LDR x0, [x1]
+    CBNZ x0, LC00
+    LC00: ISB
+    f: B fail_f
+    b end
+    fail_f: mov x2, #0
+    end: nop
+
+P3:
+{x0=0, x1=0, x2=x}
+    LDR x0, [x2]
+    DMB LD
+    LDR x1, [x2]
+
+exists {3:x0=1, 3:x1=2, 2:x0=1, 2:x2=0}

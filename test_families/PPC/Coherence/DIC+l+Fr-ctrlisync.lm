@@ -1,0 +1,15 @@
+platform ppc
+
+P0:
+{r20="NOP", r21=b}
+    a: STW r20, 0(r21)
+
+P1:
+{r22=0, r21=b}
+    b: B end
+    isync
+    c: LWZ r22, 0(r21)
+    end: NOP
+
+// 1207959556 = b: B end
+exists {1:r22=1207959556}

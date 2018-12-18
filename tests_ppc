@@ -1,0 +1,43 @@
+test_families/PPC/Ord/Ord+ww+RF-ctrlisync.lm validated
+
+test_families/PPC/MP_shape/MP+ww+rr.lm validated
+test_families/PPC/MP_shape/MP+ww-sync+rr-sync.lm forbidden
+
+test_families/PPC/MP_shape/MP+lw+rF.lm validated
+test_families/PPC/MP_shape/MP+lw-sync+rF.lm validated
+test_families/PPC/MP_shape/MP+lw-sync+rF-isync.lm allowed
+test_families/PPC/MP_shape/MP+lw-sync+rF-ctrlisync.lm allowed
+test_families/PPC/MP_shape/MP+lw-dcic+rF.lm allowed
+test_families/PPC/MP_shape/MP+lw-dcic+rF-isync.lm allowed
+test_families/PPC/MP_shape/MP+lw-dcic+rF-ctrlisync.lm forbidden
+
+test_families/PPC/MP_shape/MP+wl+Fr.lm validated
+test_families/PPC/MP_shape/MP+wl-sync+Fr.lm validated
+test_families/PPC/MP_shape/MP+wl-sync+Fr-isync.lm forbidden?
+
+test_families/PPC/MCA/WRC+w+rw+rr.lm validated
+test_families/PPC/MCA/WRC+w+rw-addr+rr-addr.lm validated
+test_families/PPC/MCA/WRC+w+rw-sync+rr-sync.lm forbidden
+test_families/PPC/MCA/WRC+l+Fw+rF.lm allowed
+test_families/PPC/MCA/WRC+l+Fw-sync+rF.lm allowed
+test_families/PPC/MCA/WRC+l+Fl+FF-ctrlisync.lm allowed
+test_families/PPC/SM/SM.lm validated
+test_families/PPC/SM/SM-icdc.lm validated
+test_families/PPC/SM/SM-dcic.lm validated
+test_families/PPC/SM/SM-icdc-isync.lm validated
+test_families/PPC/SM/SM-dcic-isync.lm forbidden
+
+// Instruction->Data Coherence ?
+test_families/PPC/Coherence/CoFR.lm forbidden?
+test_families/PPC/Coherence/CoFR-isync.lm forbidden?
+
+// Data->Instruction Coherence?
+test_families/PPC/Coherence/CoRF.lm allowed
+test_families/PPC/Coherence/CoRF-isync.lm allowed
+test_families/PPC/Coherence/CoRF-ctrlisync.lm allowed
+
+// Instruction->Instruction coherence
+test_families/PPC/Coherence/CoFF.lm allowed?
+
+// DCBST strength
+

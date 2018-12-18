@@ -1,0 +1,20 @@
+// 3020029952="b: CBZ x0, c"
+P0:
+{w0=3020029952, x1=b}
+    STR w0, [x1]
+
+// d appears unreachable, however the Arm ARM says that a concurrent modification of a
+// conditional branch without synchronisation may lead to seeing any combination of the
+// condition/target.  This would mean an execution may be consistent with executing "b:
+// CBZ x0, d" and so we observe P1:x0=2
+P1:
+{x4=0}
+    mov x0, #0
+    b: CBNZ x0, d
+    b end
+    c: mov x0, #1
+    b end
+    d: mov x0, #2
+    end: nop
+
+exists {1:x0=2}

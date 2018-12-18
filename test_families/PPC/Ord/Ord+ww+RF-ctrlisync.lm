@@ -1,0 +1,24 @@
+platform ppc
+initial {mem[y]=0}
+
+P0:
+{r20=y, r21="NOP", r22=d}
+    stw r21, 0(r22)
+    dcbst r0,r22
+    sync
+    icbi r0,r22
+    li r23, 1
+    stw r23, 0(r20)
+
+P1:
+{r20=y, r25=0}
+    c: lwz r10, 0(r20)
+    cmpw r10,r10
+    beq L
+    L: isync
+    d: b fail_d
+    b end
+    fail_d: li r25, 1
+    end: nop
+
+exists {1:r10=1, 1:r25=1}

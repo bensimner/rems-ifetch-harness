@@ -1,0 +1,6 @@
+P0:
+    MOV x0, #1
+    LSL x0, x0, #32
+    MOV w0, #1
+
+exists {0:x0=1}

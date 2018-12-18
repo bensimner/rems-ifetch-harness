@@ -1,0 +1,36 @@
+init {Mx=0}
+
+P0:
+{w2=<NOP>}
+    NOP
+    NOP
+    ADR x0, x
+    STR w2, [x0]
+    NOP
+    NOP
+    NOP
+    DMB ST
+    ADR x0, h
+    STR w2, [x0]
+    ic ivau, x0
+    dsb ish
+    dc cvau, x0
+
+P1:
+{x3=&Mx}
+    PRFM PLIL2KEEP, x
+    y: mov x4, x3
+    BL f
+    BL f
+    b end
+    h: B y
+    f: mov w0, #1
+    x: B end_x
+    mov w0, #2
+    end_x: str w0, [x4], #4
+    RET
+    end: mov x4, x3
+    ldr w5, [x4], #4
+    ldr w6, [x4], #4
+
+exists {1:w5=2, 1:w6=1}

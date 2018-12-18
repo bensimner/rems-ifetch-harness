@@ -1,0 +1,14 @@
+tag IDC, IDCoherence
+P0:
+{w0="NOP", x1=b}
+    a: STR w0, [x1]
+
+P1:
+{w0=0, x1=b}
+    b: B end
+    ISB
+    c: LDR w0, [x1]
+    end: NOP
+
+// 335544321 = b: B end
+exists {1:w0=335544321}

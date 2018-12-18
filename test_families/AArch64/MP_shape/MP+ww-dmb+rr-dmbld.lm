@@ -1,0 +1,16 @@
+initial {mem[x]=0,mem[y]=0}
+
+P0:
+{x0=1, x1=x, x2=1, x3=y}
+    STR X0, [X1]
+    DMB ST
+    STR X2, [X3]
+
+P1:
+{x3=y, x4=x}
+    LDR X0, [X3]
+    DMB LD
+    LDR X1, [X4]
+
+
+exists {1:X0=1, 1:X1=0}

@@ -1,0 +1,20 @@
+platform ppc
+
+initial {mem[y]=0}
+
+P0:
+{r7=d,r8="NOP",r9=y,r10=1}
+    a: stw r8,0(r7)
+    sync
+    b: stw r10,0(r9)
+
+
+P1:
+{r9=y,r10=1}
+    c: lwz r8,0(r9)
+    d: b fail_d
+    b overp1
+    fail_d: li r10, 0
+    overp1: nop
+
+exists {1:r8=1, 1:r10=0}

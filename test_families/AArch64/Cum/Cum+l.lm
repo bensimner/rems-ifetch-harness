@@ -1,0 +1,39 @@
+initial {mem[x]=0,mem[y]=0}
+
+P0:
+{w0="NOP", x10=x}
+    ADR x11, c
+    STR w0, [x11]
+    DC CVAU, x11
+    DSB ISH
+    IC IVAU, x11
+    DSB ISH
+    MOV x1, #1
+    STR x1, [x10]
+
+P1:
+{w1="NOP",x10=x,x12=y}
+    L: LDR x0, [x10]
+    CBZ x0, L
+    c: B over
+    ADR x11, d
+    STR w1, [x11]
+    DC CVAU, x11
+    DSB ISH
+    IC IVAU, x11
+    DSB ISH
+    MOV x2, #1
+    STR x2, [x12]
+    over: nop
+
+P2:
+{x12=y}
+    L2: LDR x0, [x12]
+    CBZ x0, L2
+    ISB
+    mov x1, #0
+    d: b over2
+    mov x1, #1
+    over2: nop
+
+exists {1:x0=1, 2:x0=1, 2:x1=0}

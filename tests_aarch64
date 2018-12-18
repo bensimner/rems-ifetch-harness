@@ -1,0 +1,35 @@
++tests_aarch64_coherence
++tests_aarch64_mp
++tests_aarch64_sm
++tests_aarch64_8.5
++tests_aarch64_atomic_ifetch
+
+test_families/AArch64/MP_shape/MP+lwrw-dmbs-dcic+rw+rF-ctrlisb.lm forbidden
+test_families/AArch64/MP_shape/MP+lwrw-dmbs-dsbic+rw+rF-ctrlisb.lm forbidden?
+
+test_families/AArch64/MP_shape/MP+wl+Fr.lm allowed
+test_families/AArch64/MP_shape/MP+wl-dmb+Fr.lm forbidden?
+test_families/AArch64/MP_shape/MP+wl-dmb+Fr-isb.lm forbidden
+
+test_families/AArch64/MP_shape/MP+wll-dmb-dcic+FFr.lm allowed
+test_families/AArch64/MP_shape/MP+lrF-dmb-ctrlisb+Fw.lm 8 allowed
+test_families/AArch64/MP_shape/MP+lFw-icdsb+rF-ctrlisb.lm allowed
+test_families/AArch64/MP_shape/MP+lFw+rr-dmb.lm forbidden
+
+test_families/AArch64/MP_shape/MP+ww+rr.lm allowed
+test_families/AArch64/MP_shape/MP+ww-dmb+rr-ctrl.lm allowed
+test_families/AArch64/MP_shape/MP+ww-dmb+rr-dmbld.lm forbidden
+
+test_families/AArch64/MP_shape/SM+lwrF-dmbs-ic+rw-dmb.lm forbidden?
+test_families/AArch64/MP_shape/SM+lwrF-dmbs-ic-isb+rw-dmb.lm forbidden?
+test_families/AArch64/MP_shape/SM+lwrF-dmbs-dcic-isb+rw-dmb.lm forbidden
+
+test_families/AArch64/MP_shape/MP+ll+FF.lm allowed
+test_families/AArch64/MP_shape/MP+ll-ic+FF.lm allowed
+test_families/AArch64/MP_shape/MP+ll-dcic+FF.lm allowed
+test_families/AArch64/MP_shape/MP+ll-dmb+FF-cache.lm allowed
+test_families/AArch64/MP_shape/MP+ll-dmb+FF.lm allowed
+test_families/AArch64/MP_shape/MP+ll-dsbic+FF.lm forbidden
+
+test_families/AArch64/WRC_shape/WRC+l+rw-addr+rrrF-addr-dcic-dsbisb.lm forbidden?
+test_families/AArch64/MP_shape/MP+lww-dmb-dcother-ic+rF-ctrlisb.lm forbidden?

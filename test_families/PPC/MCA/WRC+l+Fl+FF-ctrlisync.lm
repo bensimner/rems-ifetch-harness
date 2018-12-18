@@ -1,0 +1,28 @@
+platform ppc
+
+P0:
+{r20="NOP", r21=b}
+    a: STW r20, 0(r21)
+
+P1:
+{r20="NOP", r22=d, r24=0, r25=0}
+    bl b
+    b end
+    b: b fail_b
+    c: stw r20, 0(r22)
+    li r24, 1
+    b over
+    fail_b: li r25, 1
+    over: bclr 20,0,0
+    end: nop
+
+P2:
+{r20="NOP", r22=d, r23=0, r24=0, r25=0}
+    d: b fail_d
+    isync
+    e: bl b
+    b overp2
+    fail_d: li r23, 1
+    overp2: nop
+
+exists {1:r24=1, 1:r25=0, 2:r23=0, 2:r24=0, 2:r25=1}

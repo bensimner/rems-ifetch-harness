@@ -1,0 +1,16 @@
+platform ppc
+
+P0:
+{r20="NOP", r21=b}
+    a: stw r20, 0(r21)
+    dcbst r0,r21
+    sync
+    icbi r0,r21
+    isync
+    b: b fail_b
+    li r22, 1
+    b end
+    fail_b: li r22, 0
+    end: nop
+
+exists {0:r22=0}

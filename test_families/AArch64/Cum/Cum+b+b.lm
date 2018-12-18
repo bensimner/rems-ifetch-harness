@@ -1,0 +1,37 @@
+P0:
+{w0="NOP"}
+    ADR x9, g
+    ADR x10, d
+    STR w0, [x9]
+    DC CVAU, x9
+    DSB ISH
+    IC IVAU, x9
+    DSB ISH
+    STR w0, [x10]
+
+P1:
+{x1=0, w0="NOP"}
+    d: B fail_d
+    ADR x11, f
+    STR w0, [x11]
+    b end
+    fail_d:
+        mov x1, #1
+        b end
+    end: nop
+
+P2:
+{x1=0}
+    f: B fail_f
+    g: B fail_g
+    b end2
+
+    fail_f:
+        mov x1, #1
+        b end2
+    fail_g:
+        mov x1, #2
+        b end2
+    end2: nop
+
+exists {1:x1=0, 2:x1=2}

@@ -1,0 +1,26 @@
+init {Mx=0}
+
+P0:
+{w2=<NOP>}
+    ADR x0, x
+    STR w2, [x0]
+    DC CVAU, X0
+    DSB ISH
+    IC IVAU, X0
+    DSB ISH
+
+P1:
+{w2=<NOP>}
+    mov x3, #4096
+    loop: sub x3, x3, #1
+    cbnz x3, loop
+    adr x1, x
+    ldr w0, [x1]
+    cbz w0, ap
+    ap: isb
+    mov w0, #0
+    x: B end
+    LDR w0, [x1]
+    end: NOP
+
+exists {1:w0=335544323}

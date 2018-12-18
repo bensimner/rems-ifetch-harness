@@ -1,0 +1,19 @@
+P0:
+{w0="NOP"}
+    ADR x10, x
+    ADR x11, y
+
+    str w0, [x11]
+    dmb st
+    str w0, [x10]
+
+P1:
+{x0=0, x1=0}
+    PRFM PLIL1KEEP, y
+    x: B y
+    mov x0, #1
+    y: B end
+    mov x1, #1
+    end: NOP
+
+exists {1:x0=1, 1:x1=0}

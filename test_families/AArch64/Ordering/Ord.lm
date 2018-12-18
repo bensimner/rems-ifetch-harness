@@ -1,0 +1,25 @@
+init {Mx=1, My=1}
+
+P0:
+{x10=&Mx, x11=&My}
+    mov x0, #2
+    str x0, [x10]
+    dmb st
+    mov x1, #2
+    str x1, [x11]
+
+P1:
+{x0=0, x1=0, x10=&Mx, x11=&My, w5=<NOP>}
+    ldr x0, [x11]
+    adr x20, z
+    eor x3, x0, x0
+    str w5, [x20, x3]
+    dc cvau, x20
+    ic ivau, x20
+    isb
+    z: b end
+    ldr x1, [x10]
+    end: nop
+
+
+exists {1:x0=2, 1:x1=1}

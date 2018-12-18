@@ -1,0 +1,22 @@
+initial {mem[z]=0}
+
+P0:
+{w0="NOP", x1=e}
+    a: STR w0, [x1]
+
+P1:
+{x1=e, x2=1, x3=z}
+    b: LDR w0, [x1]
+    dmb sy
+    c: STR x2, [x3]
+
+P2:
+{x0=0, x1=z, x2=0}
+    d: LDR x0, [x1]
+    e: b fail_e
+    mov x2, #1
+    b end2
+    fail_e: mov x2, #0
+    end2: nop
+
+exists {1:w0="NOP", 2:x0=1, 2:x2=0}

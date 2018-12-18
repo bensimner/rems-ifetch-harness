@@ -1,0 +1,6 @@
+test_families/AArch64/SM_shape/SM.lm 1000 10 allowed
+test_families/AArch64/SM_shape/SM+lF-dsbisb.lm 1000 10 allowed
+test_families/AArch64/SM_shape/SM+lF-icdsbisb.lm 1000 10 allowed
+test_families/AArch64/SM_shape/SM-ic-dc.lm 1000 10 allowed
+test_families/AArch64/SM_shape/SM-nsh.lm 1000 10 forbidden?
+test_families/AArch64/SM_shape/SM-dc-ic.lm 1000 10 forbidden

@@ -1,0 +1,5 @@
+test_families/AArch64/CoRR_shape/DIC+l+Fr-ctrlisb.lm 10000 50 forbidden?
+test_families/AArch64/WRC_shape/WRC+l+Fw+rr-dmb.lm 10000 1000 forbidden
+test_families/AArch64/Coherence/IDC-MP+ww-dmb+Fw-ctrl+rr-dmb.lm 1000 100 forbidden?
+test_families/AArch64/CoRR_shape/CoRR+w+Fr.lm 1000 10 forbidden?
+test_families/AArch64/Ordering/Ord+lw-dcic+wrw-co-rfi-addr+rF-ctrlisb.lm 1000 10 forbidden?

@@ -1,0 +1,24 @@
+tag IDC, IDCoherence
+initial {mem[x]=0}
+
+P0:
+{x0=1, x1=x, w2="NOP", x3=f, w4="NOP", x5=d}
+    a: str x0, [x1]
+    dmb st
+    b: str w2, [x3]
+    dc cvau, x3
+    dsb ish
+    ic ivau, x3
+    dsb ish
+    c: str w4, [x5]
+
+P1:
+{x0=0, x2=0, x3=x}
+    d: b end
+    mov x0, #1
+    f: B over
+    LDR x2, [x3]
+    over: nop
+    end: nop
+
+exists {1:x0=1, 1:x2=0}

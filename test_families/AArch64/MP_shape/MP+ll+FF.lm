@@ -1,0 +1,14 @@
+P0:
+{w0="NOP", x1=d, w2="NOP", x3=c}
+    a: str w0, [x1]
+    b: str w2, [x3]
+
+P1:
+{x0=0, x1=0}
+    c: B d
+    mov x0, #1
+    d: B end
+    mov x1, #1
+    end: nop
+
+exists {1:x0=1, 1:x1=0}

@@ -1,0 +1,43 @@
+// PPOCA genenrally 2 threads: 
+// P0   |  P1
+// Wx=1 | R y=1
+// dmb  | (ctrl)
+// Wy=1 | Write z=1
+//      | Read  z=1
+//      |  (addr)
+//      | R x=0
+
+platform aarch64
+init {Mx=0, My=0}
+
+P0:
+{x9=&Mx, x10=&My}
+    MOV x0, #1
+    STR x0, [x9]
+    dmb st
+    MOV x1, #1
+    STR x1, [x10]
+
+P1:
+{x2=0, x5=0, x9=&Mx, x10=&My, w11=<NOP>}
+    LDR x0, [x9]
+    EOR x1, x0, x0
+    CBZ x1, L
+    L: adr x12, z
+    str w11, [x12]
+    DC CVAU, x12
+    NOP
+    NOP
+    NOP
+    NOP
+    IC IVAU, x12
+    NOP
+    NOP
+    NOP
+    z: b end
+    mov x2, #1
+    eor x4, x3, x3
+    ldr x5, [x10, x4]
+    end: nop
+
+exists {1:x0=1, 1:x2=1, 1:x5=0}

@@ -1,0 +1,37 @@
+initial {mem[y]=0,mem[x]=0}
+
+P0:
+{w0="NOP", x3=y}
+    ADR x1, x
+    STR w0, [X1]
+    DC CVAU, x1
+    DSB ISH
+    IC IVAU, X1
+    DSB ISH
+    MOV x2, #1
+    STR x2, [x3]
+
+P1:
+{x0=0, x1=x, x2=y}
+    BL y
+    B end
+    y: LDR x3, [x2]
+    cbz x3, y
+    isb
+    x: B over
+    MOV X0, #2
+    B store
+    over: MOV X0, #1
+    store: STR x0, [x1]
+    RET
+    end: NOP
+
+P2:
+{x0=0, x1=x}
+    PRFM PLIL2KEEP, x
+    LDR x2, [x1]
+    CBNZ x2, L
+    L: ISB
+    BL x
+
+exists {1:x0=2, 2:x0=1, 2:x2=2}

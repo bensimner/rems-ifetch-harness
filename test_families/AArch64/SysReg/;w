@@ -1,0 +1,9 @@
+P0:
+    MRS x0, CTR_EL0
+    RBIT x0, x0
+    TST x0, 4
+    CSET x1, EQ
+    TST x0, 8
+    CSET x2, EQ
+
+exists {0:x1=1, 0:x2=1}

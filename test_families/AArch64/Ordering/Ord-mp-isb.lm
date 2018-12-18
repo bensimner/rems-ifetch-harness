@@ -1,0 +1,26 @@
+// LB-ordering
+// P0      | P1
+// R x=1   | z: b end
+// dmb     |  W x=1
+// W z=nop | end: nop
+// 
+
+initial {mem[x]=0}
+
+P0:
+{x0=2, x10=x, w1="NOP"}
+    str x0, [x10]
+    dmb st
+    adr x11, z
+    str w1, [x11]
+
+P1:
+{x0=1, x10=x}
+    prfm pldl2keep, [x10]
+    z: b end
+    isb
+    ldr x0, [x10]
+    end: nop
+
+
+exists {1:x0=0}

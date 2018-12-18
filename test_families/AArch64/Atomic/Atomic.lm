@@ -1,0 +1,18 @@
+initial {mem[x]=1}
+
+P0:
+{w0="NOP"}
+    ADR x1, x
+    ADR x2, y
+    STR w0, [x1]
+    dmb st
+    STR w0, [x2]
+
+
+P1:
+{x0=0, x1=x, x2=0}
+    x: MOV x0, #1
+    y: LDR x2, [x1]
+
+
+exists {1:x0=0, 1:x2=1}

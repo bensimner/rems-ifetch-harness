@@ -1,0 +1,12 @@
+init {Mx=0}
+
+P0:
+{w2=<NOP>}
+    MOV X0, #1
+    ADR x3, x
+    x: B end
+    STR w2, [X3]
+    MOV X0, #2
+    end: NOP
+
+exists {0:X0=2}

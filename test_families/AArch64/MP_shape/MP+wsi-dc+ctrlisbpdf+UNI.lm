@@ -1,0 +1,13 @@
+P0:
+{w0="NOP", w1="NOP1", w2="NOP2", x3=x}
+    STR w0, [x3]
+    STR w1, [x3]
+    DC CVAU, x3
+    STR w2, [x3]
+
+P1:
+{w0=0, x1=x}
+    LDR w0, x1
+    CBZ w0, LC00
+    LC00: ISB
+    x: NOP

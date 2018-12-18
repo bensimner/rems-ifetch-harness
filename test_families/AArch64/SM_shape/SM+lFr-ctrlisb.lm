@@ -1,0 +1,14 @@
+tag DIC, DICoherence
+P0:
+{x0=0, w1="NOP", x2=x}
+    mov x0, #1
+    str w1, [x2]
+    DSB ISH
+    ISB
+    x: b end
+    isb
+    ldr x0, [x2]
+    end: nop
+
+// 335544323="B end"
+exists {0:x0=335544323}

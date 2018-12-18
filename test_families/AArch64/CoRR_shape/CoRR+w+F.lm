@@ -1,0 +1,13 @@
+initial {mem[x]=1}
+
+P0:
+{w2=3107979296}
+    adr x0, x
+    str w2, [x0]
+
+P1:
+{w0=0}
+    adr x1, x
+    x: nop
+
+exists {1:w0=1}

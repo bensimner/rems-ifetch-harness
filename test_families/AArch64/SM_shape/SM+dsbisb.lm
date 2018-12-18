@@ -1,0 +1,12 @@
+tag DIC, DICoherence
+P0:
+{w1="NOP", x2=x}
+    mov x0, #1
+    str w1, [x2]
+    dsb ish
+    isb
+    x: b end
+    mov x0, #2
+    end: nop
+
+exists {0:X0=1}

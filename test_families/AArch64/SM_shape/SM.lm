@@ -1,0 +1,12 @@
+P0:
+{w2="NOP"}
+    MOV X0, #1
+    ADR x3, x
+    STR w2, [X3]
+    DSB SY
+    ISB
+    x: B end
+    MOV X0, #2
+    end: NOP
+
+exists {0:X0=1}
