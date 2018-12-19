@@ -251,7 +251,8 @@ def results(tests_fname, tests_re, source):
 @main.command('run')
 @click.argument('f')
 @click.option('--ntimes', '-n', nargs=1, default=1)
-@click.option('--nruns', '-r', nargs=1, default=1000)
+@click.option('--nruns', '-r', nargs=1, default=100)
+@click.option('--nspawns', '-p', nargs=1, default=10)
 @click.option('--nrepeats', '-t', nargs=1, default=1)
 @click.option('--dir', nargs=1, default="temp/")
 @click.option('--ssh', '-s', nargs=1, multiple=True, default=["sgs8"])
@@ -259,12 +260,12 @@ def results(tests_fname, tests_re, source):
 @click.option('--quiet', '-q', is_flag=True)
 @click.option('--forever', is_flag=True)
 @click.option('--optimise', '-O', nargs=1, default=2)
-def run(f, ntimes, nruns, nrepeats, dir, ssh, one_shot, quiet, forever, optimise):
+def run(f, ntimes, nruns, nspawns, nrepeats, dir, ssh, one_shot, quiet, forever, optimise):
     mangle = make_mangle()
     s = Settings(quiet, False, dir, one_shot)
     opt = Optimisations.from_level(optimise)
     print('Running with -O{}, enabled optimisations: {}'.format(optimise, str(opt)))
-    ts = TestSettings(mangle, f, nruns, ntimes, nrepeats, '', opt)
+    ts = TestSettings(mangle, f, nruns, ntimes, nspawns, nrepeats, '', opt)
     t = Test(ssh)
     ctx = TestContext(s, ts)
     loop = asyncio.get_event_loop()
@@ -387,11 +388,12 @@ def print_test_outcome(f, test):
 @click.option('--ssh', '-s', nargs=1, multiple=True, default=["sgs8"])
 @click.option('--quiet', '-q', is_flag=True)
 @click.option('--ntimes', '-n', nargs=1, type=int, default=None)
+@click.option('--nspawns', '-p', nargs=1, type=int, default=None)
 @click.option('--nruns', '-r', nargs=1, type=int, default=None)
 @click.option('--nrepeats', '-t', nargs=1, type=int, default=None)
 @click.option('--nworkers', '-w', nargs=1, type=int, default=4)
 @click.option('--optimise', '-O', nargs=1, type=int, default=2)
-def runall(tests_fname, dir, ssh, quiet, ntimes, nruns, nrepeats, nworkers, optimise):
+def runall(tests_fname, dir, ssh, quiet, ntimes, nruns, nspawns, nrepeats, nworkers, optimise):
     s = Settings(quiet, False, dir, False)
     t = Test(ssh)
     loop = asyncio.get_event_loop()
@@ -402,7 +404,7 @@ def runall(tests_fname, dir, ssh, quiet, ntimes, nruns, nrepeats, nworkers, opti
         n = ntimes or Nd[state][1]
         mangle = make_mangle()
         opt = Optimisations.from_level(optimise)
-        ts = TestSettings(mangle, tname, r, n, nrepeats, '', opt)
+        ts = TestSettings(mangle, tname, r, n, nspawns, nrepeats, '', opt)
         ctx = TestContext(s, ts)
         t = Test(ssh)
         builds.append(t.build(ctx))
@@ -514,6 +516,7 @@ class TestSettings:
     litmus_file: str = ""
     r: int = 1000
     n: int = 100
+    p: int = 100
     t: int = 1
     platform: str = 'aarch64'
     optimisations: Optimisations = None
@@ -576,6 +579,9 @@ class Test:
         await Proc(['cp', 'gen.c', '{lname}.c'.format(ctx=ctx, lname=self.source.litmus.name)]).run_and_wait(cwd=ctx.settings.dir)
         await Proc(['make']).run_and_wait(cwd=ctx.settings.dir, env=env)
         await Proc(['cp', 'run.exe', 'run_{ctx.test.mangle}.exe'.format(ctx=ctx)]).run_and_wait(cwd=ctx.settings.dir)
+        await Proc(['cp', 'runpar_{ctx.test.mangle}.exe'.format(ctx=ctx), 'runpar_last.exe']).run_and_wait(cwd=ctx.settings.dir)
+        await Proc(['cp', 'run_{ctx.test.mangle}.exe'.format(ctx=ctx), 'run_last.exe']).run_and_wait(cwd=ctx.settings.dir)
+
 
     async def cleanup(self, ctx):
         await Proc(['rm', 'run_{ctx.test.mangle}.exe'.format(ctx=ctx)]).run_and_wait(cwd=ctx.settings.dir, fail=False)
@@ -828,6 +834,7 @@ class TestProc:
              "~/bjs/run_{mangle}.exe".format(mangle=ctx.test.mangle),
              ctx.test.n,
              ctx.test.r,
+             ctx.test.p,
             ]
         )
 
@@ -858,7 +865,10 @@ class TestProc:
             r.dump()
 
     async def _run_once(self, ctx):
-        p = await self.ssh.run(['~/bjs/run_{mangle}.exe {r}; echo $?'.format(mangle=ctx.test.mangle, r=ctx.test.r)])
+        p = await self.ssh.run(
+                [('~/bjs/run_{mangle}.exe {r} {p}; echo $?'
+                    .format(mangle=ctx.test.mangle, r=ctx.test.r, p=ctx.test.p))]
+            )
 
         lines = iter(p.stdout.readline, b'')
         while True:

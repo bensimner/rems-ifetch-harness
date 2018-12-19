@@ -21,9 +21,10 @@ typedef struct {
     int turn;
 } pb_t;
 
-pb_t barrier;
-pb_t barrier_code;
+pthread_mutex_t glob;
+int barrier_code;
 
+pb_t barrier;
 
 {% for p in litmus.processes %}pthread_t p{{p.name}}_t;
 void* code_block_ptr{{p.name}};
@@ -31,6 +32,7 @@ void* code_block_ptr{{p.name}};
 static pthread_t* pts[] = { {% for p in litmus.processes %}&p{{p.name}}_t {{ "," if not loop.last }} {% endfor %} };
 
 static uint64_t R;
+static uint64_t N;
 
 void binit(int c, pb_t* b) {
     b->cond = (pthread_cond_t*)malloc(sizeof(pthread_cond_t));
@@ -92,13 +94,26 @@ void trace(char* s) {
     //printf("{\"trace\": \"%s\"}\n", s); fflush(stdout);
 }
 
+struct Result {
+    {% for r in litmus.out_registers -%}
+    int64_t* {{r.var_name}};
+    {% endfor -%}
+};
+
+struct ResultPair {
+    struct Result* result;
+    int64_t count;
+    int64_t validated;
+};
+
 struct Arg {
     {% for m in litmus.initial_mem %}uint64_t* {{m.var}};
     {% endfor %}
 
+    int run;
     int stride;
     int** cpus;
-    int64_t* results[];
+    struct Result results[];
 };
 
 void print_out(void) {
@@ -109,7 +124,7 @@ int DONE;
 void* timeout(void* a) {
     int t = 0;
     while (!DONE) {
-        if (t > 5000*1000 + R*100*1000) {
+        if (t > 5000*1000 + N*R*100*1000) {
             printf("{\"error\":\"kill\"}\n");
             exit(7);
             return NULL;
@@ -200,13 +215,14 @@ void* p{{p.name}}(void* a) {
         : [out] "=&r" (code_block_ptr{{p.name}}) : : "memory");
     {% endif %}
     trace("p{{p.name}}-0.01");
-    bwait(&barrier_code);
+    pthread_mutex_lock(&glob);
+    barrier_code++;
+    pthread_mutex_unlock(&glob);
     trace("p{{p.name}}-0.02");
     int64_t pagesize = getpagesize();
     void* code_block_ptr = (void*)((long)code_block_ptr{{p.name}} & ~(pagesize-1));
     trace("p{{p.name}}-0.05");
     if(mprotect(code_block_ptr, pagesize, PROT_READ|PROT_EXEC|PROT_WRITE)) {
-        printf("__P{{p.name}}=%p\n", code_block_ptr{{p.name}});
         trace("p{{p.name}}-0.05fail");
         err(1, "mprotect");
     }
@@ -234,8 +250,9 @@ void* p{{p.name}}(void* a) {
 
     {% if opt.prefetch -%}
     for (int k = 0; k < R; k++) {
+        int kr = arg->run*R + k;
         {% for m in p.mems -%}
-        if (randbit() && arg->{{m.var}}[k] != {{litmus.initial_mem[m]}}) {
+        if (randbit() && arg->{{m.var}}[kr] != {{litmus.initial_mem[m]}}) {
             errx(1, "global was invalid.\n");
         }
         {% endfor %}
@@ -290,13 +307,14 @@ void* p{{p.name}}(void* a) {
     {
         for (int k = 0; k < R; k++) {
     {% endif %}
+            int kr = arg->run*R + k;
             c++;
 
             {% for rs in p.in_registers-%}
             {% if isinstance(rs.value, int) -%}
             {{rs.register.var_name}} = {{rs.value}};
             {% elif isinstance(rs.value, ll.Mem) -%}
-            {{rs.register.var_name}} = (int64_t )&arg->{{rs.value.var}}[k];
+            {{rs.register.var_name}} = (int64_t )&arg->{{rs.value.var}}[kr];
             {% elif isinstance(rs.value, ll.Label) -%}
             {% if litmus.platform.name == "ppc" -%}
             asm volatile (
@@ -376,10 +394,11 @@ void* p{{p.name}}(void* a) {
             trace("p{{p.name}}-6");
             {% if False -%}
             {% if p.name == 0 -%}
-                printf("set affinity: { {% for m in litmus.processes -%} %d {{ "," if not loop.last }} {% endfor -%} }\n", {% for m in litmus.processes -%} arg->cpus[k][{{m.name}}] {{ "," if not loop.last }} {% endfor -%});
+                printf("set affinity: { {% for m in litmus.processes -%} %d {{ "," if not loop.last }} {% endfor -%} }\n", {% for m in litmus.processes -%} arg->cpus[kr][{{m.name}}] {{ "," if not loop.last }} {% endfor -%});
             {% endif -%}
             {% endif -%}
-            set_affinity(arg->cpus[k][{{p.name}}]);
+            trace("p{{p.name}}-6.1");
+//            set_affinity(arg->cpus[kr][{{p.name}}]);
             trace("p{{p.name}}-6.5");
             bwait(&barrier); // go
             delay();
@@ -419,14 +438,14 @@ void* p{{p.name}}(void* a) {
             {% if r.size < 64 -%}
             {{r.var_name}} = {{r.var_name}} & 0x00000000ffffffff;
             {% endif %}
-            arg->results[k][{{loop.index - 1}}] = {{r.var_name}};
+            *arg->results[kr].{{r.var_name}}={{r.var_name}};
             {% endif %}
             {% endfor %}
 
             trace("p{{p.name}}-9");
             bwait(&barrier); // go
         {% if p.name == 0 %}
-            if (c % (R / 10) == 0) {
+            if (kr % (N*R / 10) == 0) {
                 printf(".\n"); fflush(stdout);  /* just to show it working */
             }
         {% endif %}
@@ -498,7 +517,14 @@ void* hammer(void* a) {
     };
 
     struct hammer_arg* arg = (struct hammer_arg* )a;
-    bwait(&barrier_code);
+    while (1) {
+        pthread_mutex_lock(&glob);
+        if (barrier_code >= T) {
+            pthread_mutex_unlock(&glob);
+            break;
+        }
+        pthread_mutex_unlock(&glob);
+    }
 
     // Now fill an 8k block with our branches
     // at instr_block+(arg->proc & 0xffffffff)
@@ -602,23 +628,25 @@ void* hammer(void* a) {
 int validate_results(struct Arg* arg) {
     int witnesses = 0;
     for (int n = 0; n < R; n++) {
-        {% for r in litmus.out_registers %}{{r.type_syn}} {{r.var_name}} = arg->results[n][{{loop.index - 1}}];
-        {% endfor %}
+        {% for r in litmus.out_registers -%}
+        {{r.type_syn}} {{r.var_name}} = *arg->results[n].{{r.var_name}};
+        {% endfor -%}
         {{litmus.post_state.to_switch()}}
     }
     return witnesses;
 }
 
 struct Arg* mkArg(void) {
-    struct Arg* arg = (struct Arg*)malloc(sizeof(struct Arg) + sizeof(int64_t*[R]));
-    int** allcpus = (int**)malloc(sizeof(int*)*R);
+    struct Arg* arg = (struct Arg*)malloc(sizeof(struct Arg) + sizeof(struct Result[N*R]));
+    int** allcpus = (int**)malloc(sizeof(int*)*N*R);
+    arg->run=-1;
     arg->cpus = allcpus;
 {% if opt.affinity -%}
     int nprocs = get_nprocs();
 {% else %}
     int nprocs = 2;
 {% endif %}
-    for (int k = 0; k < R; k++) {
+    for (int k = 0; k < N*R; k++) {
         int* cpus = (int*)malloc(sizeof(int)*T);
         int start = rand() % nprocs;
         for (int i = 0; i < T; i++) {
@@ -636,24 +664,22 @@ struct Arg* mkArg(void) {
         }
         ishuffle(T, cpus);
         allcpus[k] = cpus;
-    }
+
+        {% for r in litmus.out_registers -%}
+        arg->results[k].{{r.var_name}} = (int64_t*) malloc(sizeof(int64_t));
+        {% endfor -%}
+        }
     shuffle(R, (void**)allcpus);
 
     int stride = rand() % R;
     arg->stride = stride;
 
-    {% for m, v in litmus.initial_mem.items() %}arg->{{m.var}} = (uint64_t*)malloc(sizeof(uint64_t)*R);
+    {% for m, v in litmus.initial_mem.items() %}arg->{{m.var}} = (uint64_t*)malloc(sizeof(uint64_t)*N*R);
     for (int i = 0; i < R; i++) {
         arg->{{m.var}}[i] = {{v}};
     }
     {% endfor %}
 
-    for (int i = 0; i < R; i++) {
-        arg->results[i] = (int64_t*)malloc(sizeof(int64_t)*{{1+len(litmus.out_registers)}});
-        for (int j = 0; j < {{1+len(litmus.out_registers)}}; j++) {
-            arg->results[i][j] = 0L;
-        }
-    }
     return arg;
 }
 
@@ -669,6 +695,11 @@ int main(int argc,char **argv) {
     else
         R = 1;
 
+    if (argc > 2)
+        N = atoi(argv[2]);
+    else
+        N = 1;
+
     int K = {{len(litmus.out_registers)}};
     struct Arg* arg = mkArg();
 
@@ -678,12 +709,6 @@ int main(int argc,char **argv) {
     trace("main-2");
 
     binit(T, &barrier);
-    {% if opt.branch_mispredict -%}
-    binit(2*T, &barrier_code);
-    {% else -%}
-    binit(T, &barrier_code);
-
-    {% endif %}
 
     trace("main-3");
 
@@ -702,6 +727,7 @@ int main(int argc,char **argv) {
     CPU_SET(arg->cpus[0][{{p.name}}], &hammer_cpus{{p.name}});
     {% if opt.affinity -%}
     if (r=pthread_setaffinity_np(hammer{{p.name}}, sizeof(cpu_set_t), &hammer_cpus{{p.name}})) {
+        errno=r;
         warn("setaffinity_hammer{{p.name}}");
     }
     {% endif -%}
@@ -719,59 +745,53 @@ int main(int argc,char **argv) {
     {% for p in litmus.processes %}fps[{{loop.index - 1}}]=p{{p.name}};
     {% endfor %}
 
-    shuffle(T, (void**)fps);
-    shuffle(T, (void**)pts);
+    for (int r = 0; r < N; r++) {
+        arg->run++;
+        shuffle(T, (void**)fps);
+        shuffle(T, (void**)pts);
+        trace("main-7");
+        for (int i = 0; i < T; i++) {
+            pthread_create(pts[i], NULL, fps[i], (void* )arg);
+        }
 
-    trace("main-7");
-    for (int i = 0; i < T; i++) {
-        pthread_create(pts[i], NULL, fps[i], (void* )arg);
+        trace("main-8");
+        shuffle(T, (void**)pts);
+        for (int i = 0; i < T; i++) {
+            pthread_join(*(pts[i]), NULL);
+        }
+        trace("main-9");
     }
 
-    trace("main-8");
-    shuffle(T, (void**)pts);
-    for (int i = 0; i < T; i++) {
-        pthread_join(*(pts[i]), NULL);
-    }
-    trace("main-9");
-
-    flag = 0;
-    {% if opt.branch_mispredict -%}
-    {% for p in litmus.processes -%}
-    pthread_join(hammer{{p.name}}, NULL);
-    {% endfor %}
-    {% endif %}
-    trace("main-10");
+        flag = 0;
+        {% if opt.branch_mispredict -%}
+        {% for p in litmus.processes -%}
+        pthread_join(hammer{{p.name}}, NULL);
+        {% endfor %}
+        {% endif %}
+        trace("main-10");
 
     DONE = 1;
     pthread_join(timeout_t, NULL);
     trace("main-11");
 
     /* collect results */
-    int64_t* count[R];
-    for (int k = 0; k < R; k++) {
-        count[k] = (int64_t*)malloc(sizeof(int64_t)*(2+{{len(litmus.out_registers)}}));
-        count[k][{{len(litmus.out_registers)}}] = 0;
-        count[k][{{1+len(litmus.out_registers)}}] = 0;
-    }
-
+    struct ResultPair count[N*R];
     int jfill = 0;
     int found = 0;
-    for (int k = 0; k < R; k++) {
+    for (int k = 0; k < N*R; k++) {
         for (int j = 0; j < jfill; j++) {
-            {% for r in litmus.out_registers %}
-            if (count[j][{{loop.index - 1}}] != arg->results[k][{{loop.index - 1}}])
+            {% for r in litmus.out_registers -%}
+            if (*count[j].result->{{r.var_name}} != *arg->results[k].{{r.var_name}})
                  continue;
-            {% endfor %}
+            {% endfor -%}
 
-            count[j][{{len(litmus.out_registers)}}]++;
+            count[j].count++;
             found = 1;
         }
 
         if (found == 0) {
-            {% for r in litmus.out_registers %}count[jfill][{{loop.index - 1}}] = arg->results[k][{{loop.index - 1}}];
-            {% endfor %}
-            count[jfill][{{len(litmus.out_registers)}}]++;
-            count[jfill][{{1+len(litmus.out_registers)}}] = arg->results[k][{{len(litmus.out_registers)}}];
+            count[jfill].result = &(arg->results[k]);
+            count[jfill].count=1;
             jfill++;
         }
         found = 0;
@@ -780,25 +800,29 @@ int main(int argc,char **argv) {
     int witnesses = validate_results(arg);
     for (int k = 0; k < jfill; k++) {
         char* prefix = "";
-        printf("{ %s {% for r in litmus.out_registers %}\"{{r.var_name}}\":%{{r.type_fmt}}{{ "," if not loop.last}}{% endfor %}} : %lu\n", prefix, {% for r in litmus.out_registers %} count[k][{{loop.index - 1}}] {{ "," if not loop.last }} {% endfor %}, count[k][{{len(litmus.out_registers)}}]);
+        printf("{ %s {% for r in litmus.out_registers %}\"{{r.var_name}}\":%{{r.type_fmt}}{{ "," if not loop.last}}{% endfor %}} : %lu\n", prefix, {% for r in litmus.out_registers %} *count[k].result->{{r.var_name}} {{ "," if not loop.last }} {% endfor %}, count[k].count);
     }
 
     printf("WITNESS: %d\n", witnesses);
 
 
+    trace("main-11");
     bfree(&barrier);
-    bfree(&barrier_code);
     trace("main-12");
     {% if opt.branch_mispredict -%}
     munmap((void*)hammer_instr_block, BLOCK_SIZE);
     {% endif %}
     trace("main-13");
-    for (int i = 0; i < R; i++) {
-        free(arg->results[i]);
-    }
     {% for m in litmus.initial_mem -%}
     free(arg->{{m.var}});
     {% endfor %}
+    for (int k = 0; k < N*R; k++)
+    {
+        {% for r in litmus.out_registers -%}
+        free(arg->results[k].{{r.var_name}});
+        {% endfor -%}
+    }
+    trace("main-14");
     free(arg);
     return 0;
 }

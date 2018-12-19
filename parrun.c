@@ -9,6 +9,7 @@
 
 char* exe;
 char* R;
+char* N;
 pthread_mutex_t m = PTHREAD_MUTEX_INITIALIZER;
 
 extern char** environ;
@@ -23,7 +24,7 @@ void* open(char* s) {
 
     const char* mode = "r";
 
-    char* exeargv[] = {exe, R, NULL};
+    char* exeargv[] = {exe, R, N, NULL};
     int pid;
     switch (pid=fork()) {
         case 0:
@@ -48,6 +49,7 @@ void* spawn(void* _) {
 
    fp = open(exe);
 
+TODO: Maybe there's something wrong with this, sometimes it just ends early... it seems?
     while (fgets(s, sizeof(s)-1, fp) != NULL) {
         pthread_mutex_lock(&m);
         printf("%s", s); fflush(stdout);
@@ -61,16 +63,17 @@ void* spawn(void* _) {
 int main( int argc, char *argv[] )
 {
     exe = argv[1];
-    int N = atoi(argv[2]);
+    int T = atoi(argv[2]);
     R = argv[3];
+    N = argv[4];
 
   /* Open the command for reading. */
-    pthread_t ts[N];
+    pthread_t ts[T];
 
-    for (int k = 0; k < N; k++)
+    for (int k = 0; k < T; k++)
         pthread_create(&ts[k], NULL, *spawn, (void*)NULL);
 
-    for (int k = 0; k < N; k++)
+    for (int k = 0; k < T; k++)
         pthread_join(ts[k], NULL);
     return 0;
 }
