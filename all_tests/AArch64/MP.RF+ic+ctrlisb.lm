@@ -1,0 +1,22 @@
+initial {mem[x]=0}
+
+P0:
+{w0="NOP", x1=d, x2=1, x3=x}
+    str w0, [x1]
+    dsb ish
+    ic ivau, x1
+    dsb ish
+    str x2, [x3]
+
+P1:
+{x0=0, x1=1, x2=x}
+    c: LDR x0, [x2]
+    CBNZ x0, LC00
+    LC00: ISB
+    d: b fail_d
+    b end
+    fail_d: mov x1, #0
+    end: nop
+
+exists {1:x0=1, 1:x1=0}
+

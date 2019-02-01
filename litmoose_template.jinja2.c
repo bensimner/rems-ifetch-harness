@@ -46,7 +46,7 @@ void binit(int c, pb_t* b) {
 
 void bfree(pb_t* b) {
     pthread_cond_destroy(b->cond);
-    pthread_mutex_destroy(b->cond);
+    pthread_mutex_destroy(b->mut);
     free(b->mut);
     free(b->cond);
 }
@@ -398,7 +398,8 @@ void* p{{p.name}}(void* a) {
             {% endif -%}
             {% endif -%}
             trace("p{{p.name}}-6.1");
-//            set_affinity(arg->cpus[kr][{{p.name}}]);
+            if (kr % 10)
+                set_affinity(arg->cpus[kr][{{p.name}}]);
             trace("p{{p.name}}-6.5");
             bwait(&barrier); // go
             delay();
@@ -575,7 +576,7 @@ void* hammer(void* a) {
         {% if litmus.platform.name == "aarch64" %}
         hammer_instr_block[k+m - 1] = 3596551104;  // RET
         {% elif litmus.platform.name == "ppc" %}
-        hammer_instr_block[k+m - 1] = (19 << (32-6)) + (20 << (32-11)) + (16 << 1); // BCLR 20,0,0
+        hammer_instr_block[k+m - 1] = (19 << (32-6)) + (20 << (32-11)) + (16 << 1); // BCLR 20,0,0 (/BLR)
         {% endif %}
 
         delay();

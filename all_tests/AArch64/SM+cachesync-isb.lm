@@ -1,0 +1,13 @@
+P0:
+{w0="NOP", x1=x, x2=0}
+    STR w0, [X1]
+    DC CVAU, x1
+    DSB ISH
+    IC IVAU, x1
+    DSB ISH
+    ISB
+    x: B end
+    MOV X2, #1
+    end: NOP
+
+exists {0:X2=0}

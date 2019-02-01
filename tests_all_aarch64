@@ -1,0 +1,14 @@
+all_tests/AArch64/CoFF.lm                   allowed
+all_tests/AArch64/CoFR.lm                   forbidden
+all_tests/AArch64/CoRF+ctrlisb.lm           allowed
+all_tests/AArch64/MP.FF+dmb+po.lm           allowed
+all_tests/AArch64/MP.FF+cachesync+po.lm     forbidden
+all_tests/AArch64/SM+cachesync-isb.lm       forbidden
+all_tests/AArch64/MP.FR+dmb+po.lm           forbidden
+all_tests/AArch64/MP.RF+ic+ctrlisb.lm       allowed
+all_tests/AArch64/FOW.lm                    allowed
+all_tests/AArch64/WRC.F.RF+po+ctrlisb.lm    allowed
+all_tests/AArch64/WRC.F.FF+pos.lm           allowed
+all_tests/AArch64/WRC.R.RF+addrs.lm         forbidden
+all_tests/AArch64/SM+RW+RW.lm               allowed
+all_tests/AArch64/SM+RW.lm                  allowed

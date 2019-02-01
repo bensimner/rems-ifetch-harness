@@ -24,132 +24,170 @@ import datetime as dt
 from tqdm import tqdm
 from typing import List, Dict
 
-CUR_DATE = dt.datetime.now().strftime('%Y-%m-%d.%H%M')
-TRUNK_FMT = './results/{platform}/{lname}/%s-{mangle_prefix}/' % CUR_DATE
+CUR_DATE = dt.datetime.now().strftime("%Y-%m-%d.%H%M")
+TRUNK_FMT = "./results/{platform}/{lname}/%s-{mangle_prefix}/" % CUR_DATE
 DEVICE_MAKE = {
-    'sgs8': {
-        'GCC': '~/ndk/bin/aarch64-linux-android-gcc',
-        'GCCOPTS': '-Wall -std=gnu99 -O0 -fPIE -fPIC -DNOPTHREAD=0',
-        'LINKOPTS': '-pie',
-    }
-
+    "sgs8": {
+        "GCC": "~/ndk/bin/aarch64-linux-android-gcc",
+        "GCCOPTS": "-Wall -std=gnu99 -O0 -fPIE -fPIC -DNOPTHREAD=0",
+        "LINKOPTS": "-pie",
+    },
+    "clbim": {
+        "GCC": "powerpc64-linux-gnu-gcc-7",
+        "GCCOPTS": "-Wall -std=gnu99 -O2 -pthread -fPIE -fPIC $(EXT_GCC_OPTS)",
+        "LINKOPTS": "-pie",
+    },
 }
-GCC = {
-    'aarch64': 'aarch64-linux-gnu-gcc',
-    'ppc': 'powerpc64le-linux-gnu-gcc-7',
-}
+GCC = {"aarch64": "aarch64-linux-gnu-gcc", "ppc": "powerpc64le-linux-gnu-gcc-7"}
 SSHS = {
-    'aarch64': ['sgs8', 'h955', 'openq820', 'nexus9'],
-    'ppc': ['clbom', 'clbam'],
+    "aarch64": ["sgs8", "h955", "openq820", "nexus9"],
+    "ppc": ["clbom", "clbam", "clbim"],
 }
+
 
 @click.group()
 def main():
     pass
 
+
 def build_ppc(iform, *args):
-    if iform == 'I':
+    if iform == "I":
         opcd, li, aa, lk = args
-        return lk + ((aa & 0b1) << 1) + ((li & 0x00ffffff) << 2) + ((opcd & 0b11111) << (32-6))
-    elif iform == 'XL':
+        return (
+            lk
+            + ((aa & 0b1) << 1)
+            + ((li & 0x00FFFFFF) << 2)
+            + ((opcd & 0b11111) << (32 - 6))
+        )
+    elif iform == "XL":
         opcd, li, aa, lk = args
-        return lk + ((aa & 0b1) << 1) + ((li & 0x00ffffff) << 2) + ((opcd & 0b11111) << (32-6))
+        return (
+            lk
+            + ((aa & 0b1) << 1)
+            + ((li & 0x00FFFFFF) << 2)
+            + ((opcd & 0b11111) << (32 - 6))
+        )
+
 
 def my_int(i):
-    if 'x' in i:
+    if "x" in i:
         return int(i[2:], 16)
 
-    if 'b' in i:
+    if "b" in i:
         return int(i[2:], 2)
 
     return int(i)
 
-@main.command('build_ppc')
-@click.argument('iform')
-@click.argument('fields', type=my_int, nargs=-1)
+
+@main.command("build_ppc")
+@click.argument("iform")
+@click.argument("fields", type=my_int, nargs=-1)
 def build(iform, fields):
     n = build_ppc(iform, *fields)
     print(n)
     print(hex(n))
     print(bin(n))
 
-@main.command('unsplit')
-@click.argument('N')
-@click.argument('fields', nargs=-1)
-@click.option('--size', nargs=1, default=32)
+
+@main.command("unsplit")
+@click.argument("N")
+@click.argument("fields", nargs=-1)
+@click.option("--size", nargs=1, default=32)
 def unsplit(n, fields, size):
     print(bitjoin(n, *fields, sz=size))
+
 
 def bitjoin(N, *fields, sz=32):
     out = []
     for field in fields:
-        bitstr, _, rhs = field.partition('[')
-        bitstr = bitstr.replace('_', '')
-        count, _, _ = rhs.partition(']')
+        bitstr, _, rhs = field.partition("[")
+        bitstr = bitstr.replace("_", "")
+        count, _, _ = rhs.partition("]")
         if count:
             if len(bitstr) != int(count):
-                print('E: field ({}) contained {} bits, expected {} bits'.format(bitstr, len(bitstr), count))
+                print(
+                    "E: field ({}) contained {} bits, expected {} bits".format(
+                        bitstr, len(bitstr), count
+                    )
+                )
                 sys.exit(1)
         out.append(bitstr)
-    outbits = ''.join(out)
-    bits = '0b{N:0>{sz}}'.format(N=outbits, sz=sz)
-    if len(bits) > sz+2:
-        spliced = bits[:sz+2] + '/' + bits[sz+2:]
-        print('E: {spliced}: too many bits for {sz} bit instruction.'.format(spliced=spliced, sz=sz))
+    outbits = "".join(out)
+    bits = "0b{N:0>{sz}}".format(N=outbits, sz=sz)
+    if len(bits) > sz + 2:
+        spliced = bits[: sz + 2] + "/" + bits[sz + 2 :]
+        print(
+            "E: {spliced}: too many bits for {sz} bit instruction.".format(
+                spliced=spliced, sz=sz
+            )
+        )
         sys.exit(1)
 
     i = int(outbits, base=2)
-    return '{bits} : {i}'.format(bits=bits, i=i)
+    return "{bits} : {i}".format(bits=bits, i=i)
 
-@main.command('split')
-@click.argument('N')
-@click.argument('fields', nargs=-1)
-@click.option('--size', nargs=1, default=32)
+
+@main.command("split")
+@click.argument("N")
+@click.argument("fields", nargs=-1)
+@click.option("--size", nargs=1, default=32)
 def split(n, fields, size):
     print(bitsplit(n, *fields, sz=size))
 
+
 def bitsplit(N, *field_lengths, sz=32):
-    bits = iter('{N:0>{sz}}'.format(N=bin(int(N))[2:], sz=sz))
+    bits = iter("{N:0>{sz}}".format(N=bin(int(N))[2:], sz=sz))
     out = []
     for field in field_lengths:
-        size, _, namerhs = field.partition('[')
-        name, _, _ = namerhs.partition(']')
-        s = ''
+        size, _, namerhs = field.partition("[")
+        name, _, _ = namerhs.partition("]")
+        s = ""
         for _ in range(int(size)):
             s += next(bits)
         if name:
-            s += '({})'.format(name)
+            s += "({})".format(name)
         out.append(s)
-    return '_'.join(out) + str(list(bits))
+    return "_".join(out) + str(list(bits))
 
-@main.command('splitctr')
-@click.argument('N')
+
+@main.command("splitctr")
+@click.argument("N")
 def splitctr(n):
-    print(bitsplit(n, *'1[res1] 1[res0] 1[dic] 1[idc] 4[cwg] 4[erg] 4[DminLine] 2[L1Ip] 10[bits] 4[IminLine]'.split()))
-
+    print(
+        bitsplit(
+            n,
+            *"1[res1] 1[res0] 1[dic] 1[idc] 4[cwg] 4[erg] 4[DminLine] 2[L1Ip] 10[bits] 4[IminLine]".split()
+        )
+    )
 
 
 def old_litmus(dir, f):
-    cmd = '''\
+    cmd = """\
     litmus7 -mach exynos9-8895.cfg -hexa -o {dir} {litmus} \
-    '''.format(dir=dir, litmus=f)
+    """.format(
+        dir=dir, litmus=f
+    )
+
+
 #    _run_sp(cmd)
 
 
 def find_test(platform, test_name):
-    lm_path = pathlib.Path('test_families') / platform
+    lm_path = pathlib.Path("test_families") / platform
     for shape_dir in lm_path.iterdir():
         for fp in shape_dir.iterdir():
             if fp.stem == test_name:
                 with open(fp) as f:
                     return litmoose.parse(f.read(), litmus_name=lm_path.stem)
-    raise ValueError('failed to find {}'.format(test_name))
+    raise ValueError("failed to find {}".format(test_name))
     return None
 
+
 def re_matches(regex, *args, **kws):
-    if regex.startswith('!'):
+    if regex.startswith("!"):
         return not _re_matches(regex[1:], *args, **kws)
     return _re_matches(regex, *args, **kws)
+
 
 def _re_matches(regex, tname, state, lms):
     if re.search(regex, tname, re.IGNORECASE):
@@ -163,32 +201,33 @@ def _re_matches(regex, tname, state, lms):
 
     return False
 
-@main.command('checkresults')
-@click.argument('tests_fname')
-@click.argument('tests-dir', default='results')
-@click.option('--ls', is_flag=True)
+
+@main.command("checkresults")
+@click.argument("tests_fname")
+@click.argument("tests-dir", default="results")
+@click.option("--ls", is_flag=True)
 def results(tests_fname, tests_dir, ls):
     test_dir = pathlib.Path(tests_dir)
-    names = {str(f) for f in test_dir.iterdir() if f.suffix == '.lm'}
+    names = {str(f) for f in test_dir.iterdir() if f.suffix == ".lm"}
     tests = {t for (t, _) in read_tests(tests_fname)}
-    from pprint import pprint as print;
+    from pprint import pprint as print
+
     if ls:
         print(names)
     else:
         print(names - tests)
 
 
-@main.command('results')
-@click.argument('tests_fname')
-@click.argument('tests_re', nargs=-1)
-@click.option('--source', '-s', nargs=1, is_flag=True)
+@main.command("results")
+@click.argument("tests_fname")
+@click.argument("tests_re", nargs=-1)
+@click.option("--source", "-s", nargs=1, is_flag=True)
 def results(tests_fname, tests_re, source):
     results = {}
     lms = {}
-    resultsdir = pathlib.Path('results')
+    resultsdir = pathlib.Path("results")
     expected = {}
     all_sshs = set()
-
 
     for (tname, state) in read_tests(tests_fname):
         with open(tname) as lm:
@@ -207,12 +246,12 @@ def results(tests_fname, tests_re, source):
 
         results[tname] = {}
         for uid in rdir.iterdir():
-            for ssh in [d for d in uid.iterdir() if d.suffix == '.hist']:
+            for ssh in [d for d in uid.iterdir() if d.suffix == ".hist"]:
                 all_sshs.add(ssh.stem)
                 try:
                     r = Result.from_path(ssh)
                 except Exception as e:
-                    print('Failed to load {}'.format(ssh))
+                    print("Failed to load {}".format(ssh))
                     continue
                 if ssh.stem in results[tname]:
                     results[tname][ssh.stem] = Result.merge(results[tname][ssh.stem], r)
@@ -220,7 +259,7 @@ def results(tests_fname, tests_re, source):
                     results[tname][ssh.stem] = r
 
     for tname, sshs in results.items():
-        tqdm.write('{}: (expect {})'.format(tname, expected[tname]))
+        tqdm.write("{}: (expect {})".format(tname, expected[tname]))
         for ssh in sorted(all_sshs):
             r = results[tname].get(ssh, Result(tname, ssh, {}, {}))
             count = sum(r.counts.values())
@@ -231,41 +270,45 @@ def results(tests_fname, tests_re, source):
                 if lm_matches(obj, lms[tname]):
                     witnesses += c
                     validated = True
-                #fmt = '{{{}: {:,}}}'.format(rd, c)
-                #print('\t{}: {}'.format(ssh, fmt))
+                # fmt = '{{{}: {:,}}}'.format(rd, c)
+                # print('\t{}: {}'.format(ssh, fmt))
             status = get_test_status(validated, expected[tname])
             if validated:
-                tqdm.write('\t{} : {}\t({:,}/{:,})'.format(ssh, status, witnesses, count))
+                tqdm.write(
+                    "\t{} : {}\t({:,}/{:,})".format(ssh, status, witnesses, count)
+                )
             else:
-                tqdm.write('\t{} : {}\t(0/{:,})'.format(ssh, status, count))
+                tqdm.write("\t{} : {}\t(0/{:,})".format(ssh, status, count))
 
         if source:
-            tqdm.write('')
-            tqdm.write('Test:')
-            tqdm.write('\n'.join('-  ' + l for l in lms[tname].src.splitlines()))
-            tqdm.write('~'*80)
+            tqdm.write("")
+            tqdm.write("Test:")
+            tqdm.write("\n".join("-  " + l for l in lms[tname].src.splitlines()))
+            tqdm.write("~" * 80)
 
         print()
 
 
-@main.command('run')
-@click.argument('f')
-@click.option('--ntimes', '-n', nargs=1, default=1)
-@click.option('--nruns', '-r', nargs=1, default=100)
-@click.option('--nspawns', '-p', nargs=1, default=10)
-@click.option('--nrepeats', '-t', nargs=1, default=1)
-@click.option('--dir', nargs=1, default="temp/")
-@click.option('--ssh', '-s', nargs=1, multiple=True, default=["sgs8"])
-@click.option('--one-shot', is_flag=True)
-@click.option('--quiet', '-q', is_flag=True)
-@click.option('--forever', is_flag=True)
-@click.option('--optimise', '-O', nargs=1, default=2)
-def run(f, ntimes, nruns, nspawns, nrepeats, dir, ssh, one_shot, quiet, forever, optimise):
+@main.command("run")
+@click.argument("f")
+@click.option("--ntimes", "-n", nargs=1, default=1)
+@click.option("--nruns", "-r", nargs=1, default=100)
+@click.option("--nspawns", "-p", nargs=1, default=10)
+@click.option("--nrepeats", "-t", nargs=1, default=1)
+@click.option("--dir", nargs=1, default="temp/")
+@click.option("--ssh", "-s", nargs=1, multiple=True, default=["sgs8"])
+@click.option("--one-shot", is_flag=True)
+@click.option("--quiet", "-q", is_flag=True)
+@click.option("--forever", is_flag=True)
+@click.option("--optimise", "-O", nargs=1, default=2)
+def run(
+    f, ntimes, nruns, nspawns, nrepeats, dir, ssh, one_shot, quiet, forever, optimise
+):
     mangle = make_mangle()
     s = Settings(quiet, False, dir, one_shot)
     opt = Optimisations.from_level(optimise)
-    print('Running with -O{}, enabled optimisations: {}'.format(optimise, str(opt)))
-    ts = TestSettings(mangle, f, nruns, ntimes, nspawns, nrepeats, '', opt)
+    print("Running with -O{}, enabled optimisations: {}".format(optimise, str(opt)))
+    ts = TestSettings(mangle, f, nruns, ntimes, nspawns, nrepeats, "", opt)
     t = Test(ssh)
     ctx = TestContext(s, ts)
     loop = asyncio.get_event_loop()
@@ -273,65 +316,65 @@ def run(f, ntimes, nruns, nspawns, nrepeats, dir, ssh, one_shot, quiet, forever,
         loop.run_until_complete(t.build(ctx))
         loop.run_until_complete(t.run(ctx))
     except Exception as e:
-        print('E:', repr(e))
+        print("E:", repr(e))
         traceback.print_tb(e.__traceback__)
     finally:
         loop.run_until_complete(t.cleanup(ctx))
     loop.close()
 
-@main.command('lm')
-@click.argument('f')
+
+@main.command("lm")
+@click.argument("f")
 def lm(f):
     from pprint import pprint as pp
+
     with open(f) as f:
         lm = litmoose.parse(f.read())
-        print('Name:', lm.name)
-        print('Platform:', lm.platform)
-        print('Pre:')
+        print("Name:", lm.name)
+        print("Platform:", lm.platform)
+        print("Pre:")
         pp(lm.pre)
         print()
         for p in lm.processes:
-            print('p:',p.name)
-            print('Pre:')
+            print("p:", p.name)
+            print("Pre:")
             pp(p.pre)
             print(p.code)
-            print('lbls:', p.labels)
+            print("lbls:", p.labels)
             print()
 
-        print('post:')
+        print("post:")
         pp(lm.post.registers)
 
-        
-        print('-'*80)
-        print('LL')
+        print("-" * 80)
+        print("LL")
         ll = lm.to_ll()
-        print('platform:', ll.platform)
-        print('initial_mem: ', end='')
+        print("platform:", ll.platform)
+        print("initial_mem: ", end="")
         pp(ll.initial_mem)
         print()
         for p in ll.processes:
-            print('p:', p.name)
+            print("p:", p.name)
             for c in p.chunks:
-                print('in: ', end='')
+                print("in: ", end="")
                 pp(c.in_registers)
-                print('out: ', end='')
+                print("out: ", end="")
                 pp(c.out_registers)
-                print('clobber: ', end='')
+                print("clobber: ", end="")
                 pp(c.clobbers)
-                print('code:')
+                print("code:")
                 print(c.code)
                 print()
-
 
 
 def read_tests(testfile):
     with open(testfile) as f:
         for line in f:
             line = line.strip()
-            line, _, _ = line.partition('//')
+            line, _, _ = line.partition("//")
 
-            if line.startswith('+'):
-                _, _, name = line.partition('+')
+            if line.startswith("+"):
+                _, _, name = line.partition("+")
                 yield from read_tests(name)
                 continue
             if not line:
@@ -344,71 +387,83 @@ def read_tests(testfile):
                 tname, _, _, state = line.split()
             yield (tname, state)
 
+
 def get_test_status(validated, expected):
-    if validated and expected == 'allowed':
-        return crayons.green('OBSERVED')
-    elif validated and expected == 'validated':
-        return crayons.green('OBSERVED')
-    elif validated and expected == 'forbidden?':
-        return crayons.red('OBSERVED')
-    elif validated and expected == 'forbidden':
-        return crayons.red('OBSERVED')
-    elif validated and expected == 'allowed?':
-        return crayons.yellow('OBSERVED')
-    elif validated and expected == 'unknown':
-        return crayons.yellow('OBSERVED')
+    if validated and expected == "allowed":
+        return crayons.green("OBSERVED")
+    elif validated and expected == "validated":
+        return crayons.green("OBSERVED")
+    elif validated and expected == "forbidden?":
+        return crayons.red("OBSERVED")
+    elif validated and expected == "forbidden":
+        return crayons.red("OBSERVED")
+    elif validated and expected == "allowed?":
+        return crayons.yellow("OBSERVED")
+    elif validated and expected == "unknown":
+        return crayons.yellow("OBSERVED")
 
-    elif not validated and expected == 'allowed':
-        return crayons.cyan('UNOBSERVED')
-    elif not validated and expected == 'validated':
-        return crayons.blue('UNOBSERVED')
-    elif not validated and expected == 'forbidden?':
-        return crayons.green('UNOBSERVED')
-    elif not validated and expected == 'forbidden':
-        return crayons.green('UNOBSERVED')
-    elif not validated and expected == 'allowed?':
-        return crayons.yellow('UNOBSERVED')
-    elif not validated and expected == 'unknown':
-        return crayons.yellow('UNOBSERVED')
+    elif not validated and expected == "allowed":
+        return crayons.cyan("UNOBSERVED")
+    elif not validated and expected == "validated":
+        return crayons.blue("UNOBSERVED")
+    elif not validated and expected == "forbidden?":
+        return crayons.green("UNOBSERVED")
+    elif not validated and expected == "forbidden":
+        return crayons.green("UNOBSERVED")
+    elif not validated and expected == "allowed?":
+        return crayons.yellow("UNOBSERVED")
+    elif not validated and expected == "unknown":
+        return crayons.yellow("UNOBSERVED")
 
-    print('Unknown get_test_status({!r}, {!r})'.format(validated, expected))
+    print("Unknown get_test_status({!r}, {!r})".format(validated, expected))
+
 
 def print_test_outcome(f, test):
     tname, c, state, outcome = test
     status = get_test_status(outcome, state)
     if status:
-        f.write('{} : {}/{:,}'.format(tname, status, c))
+        f.write("{} : {}/{:,}".format(tname, status, c))
     else:
-        f.write('{} : <INVALID PARAMETER>'.format(tname))
+        f.write("{} : <INVALID PARAMETER>".format(tname))
 
 
-@main.command('runall')
-@click.argument('tests_fname')
-@click.option('--dir', nargs=1, default="temp/")
-@click.option('--ssh', '-s', nargs=1, multiple=True, default=["sgs8"])
-@click.option('--quiet', '-q', is_flag=True)
-@click.option('--ntimes', '-n', nargs=1, type=int, default=None)
-@click.option('--nspawns', '-p', nargs=1, type=int, default=None)
-@click.option('--nruns', '-r', nargs=1, type=int, default=None)
-@click.option('--nrepeats', '-t', nargs=1, type=int, default=None)
-@click.option('--nworkers', '-w', nargs=1, type=int, default=4)
-@click.option('--optimise', '-O', nargs=1, type=int, default=2)
-def runall(tests_fname, dir, ssh, quiet, ntimes, nruns, nspawns, nrepeats, nworkers, optimise):
+@main.command("runall")
+@click.argument("tests_fname")
+@click.option("--dir", nargs=1, default="temp/")
+@click.option("--ssh", "-s", nargs=1, multiple=True, default=["sgs8"])
+@click.option("--quiet", "-q", is_flag=True)
+@click.option("--ntimes", "-n", nargs=1, type=int, default=None)
+@click.option("--nspawns", "-p", nargs=1, type=int, default=None)
+@click.option("--nruns", "-r", nargs=1, type=int, default=None)
+@click.option("--nrepeats", "-t", nargs=1, type=int, default=None)
+@click.option("--nworkers", "-w", nargs=1, type=int, default=4)
+@click.option("--optimise", "-O", nargs=1, type=int, default=2)
+def runall(
+    tests_fname, dir, ssh, quiet, ntimes, nruns, nspawns, nrepeats, nworkers, optimise
+):
     s = Settings(quiet, False, dir, False)
     t = Test(ssh)
     loop = asyncio.get_event_loop()
 
-    Nd = { 'allowed': (150000, 10), 'forbidden': (550000, 10), 'forbidden?': (550000, 10), 'validated': (150000, 10)}
+    Nd = {
+        "allowed": (150000, 10, 1, 1),
+        "forbidden": (550000, 10, 1, 1),
+        "forbidden?": (550000, 10, 1, 1),
+        "validated": (150000, 10, 1, 1),
+    }
+
     def _make_test(tname, state, tests, builds, cleanup):
         r = nruns or Nd[state][0]
         n = ntimes or Nd[state][1]
+        p = nspawns or Nd[state][2]
+        t = nrepeats or Nd[state][3]
         mangle = make_mangle()
         opt = Optimisations.from_level(optimise)
-        ts = TestSettings(mangle, tname, r, n, nspawns, nrepeats, '', opt)
+        ts = TestSettings(mangle, tname, r, n, p, t, "", opt)
         ctx = TestContext(s, ts)
         t = Test(ssh)
         builds.append(t.build(ctx))
-        tests.append((tname, r*n, state, t.run(ctx, print_out=False)))
+        tests.append((tname, r * n, state, t.run(ctx, print_out=False)))
         cleanup.append(t.cleanup(ctx))
 
     async def worker(outcomes, q):
@@ -435,7 +490,7 @@ def runall(tests_fname, dir, ssh, quiet, ntimes, nruns, nspawns, nrepeats, nwork
         cleanup = []
         for (tname, state) in read_tests(tests_fname):
             _make_test(tname, state, tests, builds, cleanup)
-            print('test', tname)
+            print("test", tname)
 
         def cancel():
             g.cancel()
@@ -454,7 +509,7 @@ def runall(tests_fname, dir, ssh, quiet, ntimes, nruns, nspawns, nrepeats, nwork
             g = asyncio.gather(filler(tests, q), *workers)
             await g
         except Exception as e:
-            print('E:', repr(e))
+            print("E:", repr(e))
             traceback.print_tb(e.__traceback__)
         else:
             f = SplitFile()
@@ -467,46 +522,60 @@ def runall(tests_fname, dir, ssh, quiet, ntimes, nruns, nspawns, nrepeats, nwork
     loop.run_until_complete(_run_all())
     loop.close()
 
+
 class SplitFile:
     def __init__(self):
-        fmt = './results/all/{date}'
-        date = dt.datetime.now().strftime('%Y-%m-%d')
+        fmt = "./results/all/{date}"
+        date = dt.datetime.now().strftime("%Y-%m-%d")
         trunk = fmt.format(date=date)
         self.path = pathlib.Path(trunk)
         self.path.parent.mkdir(parents=True, exist_ok=True)
-        self.f = open(self.path, 'w')
+        self.f = open(self.path, "w")
 
     def write(self, m):
-        self.f.write(m + '\n')
+        self.f.write(m + "\n")
         tqdm.write(m)
 
     def close(self):
         self.f.close()
 
+
 def make_mangle():
-    return ''.join(random.choice(string.ascii_letters + string.digits) for _ in range(2+random.choice(range(10))))
+    return "".join(
+        random.choice(string.ascii_letters + string.digits)
+        for _ in range(2 + random.choice(range(10)))
+    )
+
 
 @attr.dataclass
 class Optimisations:
-    indirect: bool          = True
-    split_labels: bool      = True
-    prefetch: bool          = True
-    affinity: bool          = False
+    indirect: bool = True
+    split_labels: bool = True
+    prefetch: bool = True
+    affinity: bool = False
     branch_mispredict: bool = True
+
+    _OPT_LEVEL_ENABLE = {
+        'indirect': 1,
+        'split_labels': 1,
+        'prefetch': 2,
+        'affinity': 1,
+        'branch_mispredict': 2,
+    }
 
     def __str__(self):
         fields = attr.fields(type(self))
-        return '[{}]'.format(', '.join(f.name for f in fields if getattr(self, f.name)))
+        return "[{}]".format(", ".join(f.name for f in fields if getattr(self, f.name)))
 
     @classmethod
     def from_level(cls, level):
         fields = attr.fields(cls)
         new_fields = []
         for f in fields:
-            if level == 0:
-                new_fields.append(False)
-            elif level > 0:
+            if level >= cls._OPT_LEVEL_ENABLE[f.name]:
                 new_fields.append(True)
+            else:
+                new_fields.append(False)
         return cls(*new_fields)
 
 
@@ -518,7 +587,7 @@ class TestSettings:
     n: int = 100
     p: int = 100
     t: int = 1
-    platform: str = 'aarch64'
+    platform: str = "aarch64"
     optimisations: Optimisations = None
 
 
@@ -526,18 +595,26 @@ class TestSettings:
 class Settings:
     quiet: bool = False
     verbose: bool = False
-    dir: str = 'temp/'
+    dir: str = "temp/"
     once: bool = False
+
 
 @attr.dataclass
 class TestContext:
     settings: Settings
     test: TestSettings
 
+
 @attr.dataclass
 class LitmusSrc:
     litmus: litmoose.Litmus
     path: pathlib.Path
+
+
+@attr.dataclass
+class BuildCtx:
+    compiler: None
+
 
 @attr.dataclass
 class Test:
@@ -546,54 +623,116 @@ class Test:
 
     def generate_code(self, ctx):
         if not ctx.test.litmus_file:
-            raise ValueError('Expected litmus file setting')
+            raise ValueError("Expected litmus file setting")
 
         path = pathlib.Path(ctx.test.litmus_file)
-        with open(path) as f:
-            litmus = litmoose.parse(f.read(), litmus_name=path.stem)
-            self.source = LitmusSrc(litmus, path)
+        try:
+            with open(path) as f:
+                litmus = litmoose.parse(f.read(), litmus_name=path.stem)
+                self.source = LitmusSrc(litmus, path)
+        except FileNotFoundError:
+            print("E: Could not find", path)
+            raise
 
         ctx.test.platform = litmus.platform
         self.sshs = list(set(self.sshs) & set(SSHS[litmus.platform]))
 
-        with open('{dir}/gen.c'.format(dir=ctx.settings.dir), 'w') as f:
+        with open("{dir}/gen.c".format(dir=ctx.settings.dir), "w") as f:
             f.write(litmoose.dumps(litmus, opt=ctx.test.optimisations))
 
+        return self.make_build_ctx(ctx)
+
+    def make_build_ctx(self, ctx):
+        comps = {}
+        for ssh in self.sshs:
+            plt = ctx.test.platform
+
+            if plt + "/" + ssh in GCC:
+                comps[ssh] = GCC[plt + "/" + ssh]
+            else:
+                comps[ssh] = GCC[plt]
+        return BuildCtx(comps)
+
+    async def build_ssh(self, ctx, build_ctx, ssh):
+        env = {}
+        if ssh in DEVICE_MAKE:
+            env.update(DEVICE_MAKE[ssh])
+        else:
+            env["GCC"] = build_ctx.compiler[ssh]
+            if ctx.test.platform == "aarch64":
+                env["EXT_GCC_OPTS"] = "-Wall"
+
+        await Proc(
+            ["cp", "parrun.c", "{dir}/run.c".format(dir=ctx.settings.dir)]
+        ).run_and_wait()
+        await Proc(["make"]).run_and_wait(cwd=ctx.settings.dir, env=env)
+        await Proc(
+            [
+                "cp",
+                "run.exe",
+                "runpar_{ctx.test.mangle}.{ssh}.exe".format(ctx=ctx, ssh=ssh),
+            ]
+        ).run_and_wait(cwd=ctx.settings.dir)
+
+        await Proc(["cp", "gen.c", "run.c"]).run_and_wait(cwd=ctx.settings.dir)
+        await Proc(
+            [
+                "cp",
+                "gen.c",
+                "{lname}.{ctx.test.platform}.c".format(
+                    ctx=ctx, lname=self.source.litmus.name
+                ),
+            ]
+        ).run_and_wait(cwd=ctx.settings.dir)
+        await Proc(["make"]).run_and_wait(cwd=ctx.settings.dir, env=env)
+        await Proc(
+            [
+                "cp",
+                "run.exe",
+                "run_{ctx.test.mangle}.{ssh}.exe".format(ctx=ctx, ssh=ssh),
+            ]
+        ).run_and_wait(cwd=ctx.settings.dir)
+        await Proc(
+            [
+                "cp",
+                "runpar_{ctx.test.mangle}.{ssh}.exe".format(ctx=ctx, ssh=ssh),
+                "runpar_last.exe",
+            ]
+        ).run_and_wait(cwd=ctx.settings.dir)
+        await Proc(
+            [
+                "cp",
+                "run_{ctx.test.mangle}.{ssh}.exe".format(ctx=ctx, ssh=ssh),
+                "run_last.exe",
+            ]
+        ).run_and_wait(cwd=ctx.settings.dir)
+
     async def build(self, ctx):
-        self.generate_code(ctx)
+        build_ctx = self.generate_code(ctx)
+        self.make_build_ctx(ctx)
         env = {}
         for ssh in self.sshs:
-            if ssh in DEVICE_MAKE:
-                env.update(DEVICE_MAKE[ssh])
-                break
-        else:
-            env['GCC'] = GCC[ctx.test.platform]
-            if ctx.test.platform == 'aarch64':
-                env['EXT_GCC_OPTS'] = "-Wall"
-
-        await Proc(['cp', 'parrun.c', '{dir}/run.c'.format(dir=ctx.settings.dir)]).run_and_wait()
-        await Proc(['make']).run_and_wait(cwd=ctx.settings.dir, env=env)
-        await Proc(['cp', 'run.exe', 'runpar_{ctx.test.mangle}.exe'.format(ctx=ctx)]).run_and_wait(cwd=ctx.settings.dir)
-
-        await Proc(['cp', 'gen.c', 'run.c']).run_and_wait(cwd=ctx.settings.dir)
-        await Proc(['cp', 'gen.c', '{lname}.c'.format(ctx=ctx, lname=self.source.litmus.name)]).run_and_wait(cwd=ctx.settings.dir)
-        await Proc(['make']).run_and_wait(cwd=ctx.settings.dir, env=env)
-        await Proc(['cp', 'run.exe', 'run_{ctx.test.mangle}.exe'.format(ctx=ctx)]).run_and_wait(cwd=ctx.settings.dir)
-        await Proc(['cp', 'runpar_{ctx.test.mangle}.exe'.format(ctx=ctx), 'runpar_last.exe']).run_and_wait(cwd=ctx.settings.dir)
-        await Proc(['cp', 'run_{ctx.test.mangle}.exe'.format(ctx=ctx), 'run_last.exe']).run_and_wait(cwd=ctx.settings.dir)
-
+            await self.build_ssh(ctx, build_ctx, ssh)
 
     async def cleanup(self, ctx):
-        await Proc(['rm', 'run_{ctx.test.mangle}.exe'.format(ctx=ctx)]).run_and_wait(cwd=ctx.settings.dir, fail=False)
-        await Proc(['rm', 'runpar_{ctx.test.mangle}.exe'.format(ctx=ctx)]).run_and_wait(cwd=ctx.settings.dir, fail=False)
+        for ssh in self.sshs:
+            await self.cleanup_ssh(ctx, ssh)
+
+    async def cleanup_ssh(self, ctx, ssh):
+        await Proc(
+            ["rm", "run_{ctx.test.mangle}.{ssh}.exe".format(ctx=ctx, ssh=ssh)]
+        ).run_and_wait(cwd=ctx.settings.dir, fail=False)
+        await Proc(
+            ["rm", "runpar_{ctx.test.mangle}.{ssh}.exe".format(ctx=ctx, ssh=ssh)]
+        ).run_and_wait(cwd=ctx.settings.dir, fail=False)
 
     async def run_ssh(self, ctx, ssh_profile):
         ssh = Ssh(ssh_profile)
         tproc = TestProc(ssh, self.source)
-        return (await tproc.run(ctx))
+        return await tproc.run(ctx)
 
     async def run(self, ctx, print_out=True):
-        #results = await asyncio.gather(*[self.run_ssh(ctx, ssh) for ssh in self.sshs], return_exceptions=True)
+        # results = await asyncio.gather(*[self.run_ssh(ctx, ssh) for ssh in self.sshs], return_exceptions=True)
         results = await asyncio.gather(*[self.run_ssh(ctx, ssh) for ssh in self.sshs])
 
         if print_out and not ctx.settings.once:
@@ -610,16 +749,18 @@ class Test:
             self.print_result(ssh, r, file=f)
 
         lm = self.source.litmus
-        trunk = TRUNK_FMT.format(mangle_prefix=ctx.test.mangle, lname=lm.name, platform=lm.platform)
+        trunk = TRUNK_FMT.format(
+            mangle_prefix=ctx.test.mangle, lname=lm.name, platform=lm.platform
+        )
         path = pathlib.Path(trunk)
-        tqdm.write('Results can be found in: {path}'.format(path=path/'results'))
+        tqdm.write("Results can be found in: {path}".format(path=path / "results"))
 
     def print_result(self, ssh, result, file):
-        file.write('*** {}'.format(ssh))
+        file.write("*** {}".format(ssh))
         if isinstance(result, Exception):
-            file.write('    ERR: {}'.format(repr(result)))
+            file.write("    ERR: {}".format(repr(result)))
             traceback.print_tb(result.__traceback__)
-            file.write('')
+            file.write("")
             return
 
         validated = False
@@ -629,13 +770,17 @@ class Test:
             obj = result.result_cache[objkey]
             if self.source is not None and lm_matches(obj, self.source.litmus):
                 validated = True
-            file.write('   {:,}/{:,}: {}'.format(c, total, pprint.pformat(obj)))
+            file.write("   {:,}/{:,}: {}".format(c, total, pprint.pformat(obj)))
         if validated:
-            file.write('   - {}/{:,} RESULT {}'.format(ssh, total, crayons.green('VALIDATED')))
+            file.write(
+                "   - {}/{:,} RESULT {}".format(ssh, total, crayons.green("VALIDATED"))
+            )
         else:
-            file.write('   - {}/{:,} RESULT {}'.format(ssh, total, crayons.red('UNOBSERVED')))
+            file.write(
+                "   - {}/{:,} RESULT {}".format(ssh, total, crayons.red("UNOBSERVED"))
+            )
 
-        file.write('')
+        file.write("")
 
     def any_validated(self, results):
         for result in results:
@@ -654,16 +799,21 @@ class Test:
 
 class File:
     def __init__(self, mangle_prefix, litmus_src):
-        trunk = TRUNK_FMT.format(mangle_prefix=mangle_prefix, lname=litmus_src.name, platform=litmus_src.platform)
-        self.path = pathlib.Path(trunk) / 'results'
+        trunk = TRUNK_FMT.format(
+            mangle_prefix=mangle_prefix,
+            lname=litmus_src.name,
+            platform=litmus_src.platform,
+        )
+        self.path = pathlib.Path(trunk) / "results"
         self.path.parent.mkdir(parents=True, exist_ok=True)
-        self.f = open(self.path, 'w')
+        self.f = open(self.path, "w")
 
     def write(self, m):
-        self.f.write(m + '\n')
+        self.f.write(m + "\n")
 
     def close(self):
         self.f.close()
+
 
 def is_validated(cnter, litmus_src):
     for (count, obj) in cnter:
@@ -671,8 +821,9 @@ def is_validated(cnter, litmus_src):
             return True
     return False
 
+
 def lm_matches(obj, lm):
-    if 'error' in obj:
+    if "error" in obj:
         return False  # assume error is never intended outcome
 
     for rs in lm.post.registers:
@@ -689,19 +840,23 @@ class Ssh:
     ssh_profile: str
 
     def _run(self, cmd):
-        args = ['ssh', self.ssh_profile, *cmd]
+        args = ["ssh", self.ssh_profile, *cmd]
         return Proc(args)
 
     async def run(self, cmd):
         p = self._run(cmd)
-        return (await p.run())
+        return await p.run()
 
     async def run_and_wait(self, cmd, fail=True):
         p = self._run(cmd)
         await p.run_and_wait(fail=fail)
 
     async def scp(self, src, dest, fail=True):
-        args = ['scp', src, dest.format(ssh=self.ssh_profile)]
+        args = [
+            "scp",
+            src.format(ssh=self.ssh_profile),
+            dest.format(ssh=self.ssh_profile),
+        ]
         await Proc(args).run_and_wait(fail=fail)
 
 
@@ -715,23 +870,23 @@ class Result:
     def blah(self):
         if not path.exists():
             path.parent.mkdir(parents=True, exist_ok=True)
-            with open(self.trunk_path / 'Test.lm', 'w') as f:
-                f.write('//')
+            with open(self.trunk_path / "Test.lm", "w") as f:
+                f.write("//")
                 f.write(str(dt.datetime.now()))
-                f.write('\n')
+                f.write("\n")
                 f.write(litmus_src.src)
 
     def parse_line(self, line):
         # assume lines come in format `{r1: v1, r2: v2, ...} : count`
-        thing, _, n = line.rpartition(':')
-        if thing and thing != 'WITNESS':  # last line is a witness count
+        thing, _, n = line.rpartition(":")
+        if thing and thing != "WITNESS":  # last line is a witness count
             thing_json = json.loads(thing)
             self.result_cache[str(thing_json)] = thing_json
             self.counts[str(thing_json)] += int(n)
 
     def dump(self):
         old = collections.defaultdict(int)
-        path = self.trunk_path / (self.ssh_profile + '.hist')
+        path = self.trunk_path / (self.ssh_profile + ".hist")
         path.parent.mkdir(parents=True, exist_ok=True)
 
         try:
@@ -747,17 +902,16 @@ class Result:
         for k, v in self.counts.items():
             old[k] += v
 
-        with open(path, 'w') as f:
+        with open(path, "w") as f:
             json.dump(dict(old), f)
 
         self.counts = collections.defaultdict(int)
 
     def load(self):
-        path = self.trunk_path / (self.ssh_profile + '.hist')
+        path = self.trunk_path / (self.ssh_profile + ".hist")
         with open(path) as f:
             content = json.load(f)
             self.counts.update(content)
-
 
     @classmethod
     def from_path(cls, p):
@@ -775,8 +929,8 @@ class Result:
 
     @classmethod
     def merge(cls, r1, r2):
-        #assert r1.trunk_path == r2.trunk_path, 'trunks were different'
-        assert r1.ssh_profile == r2.ssh_profile, 'ssh profiles were different'
+        # assert r1.trunk_path == r2.trunk_path, 'trunks were different'
+        assert r1.ssh_profile == r2.ssh_profile, "ssh profiles were different"
         r = Result(r1.trunk_path, r1.ssh_profile)
         r.result_cache = dict(r1.result_cache)
         r.result_cache.update(r2.result_cache)
@@ -787,6 +941,7 @@ class Result:
             r.counts[k] += c
         return r
 
+
 @attr.dataclass
 class TestProc:
     ssh: Ssh
@@ -794,14 +949,30 @@ class TestProc:
 
     async def setup(self, ctx):
         dir = ctx.settings.dir
-        await self.ssh.scp('{ctx.settings.dir}/run_{ctx.test.mangle}.exe'.format(ctx=ctx), '{{ssh}}:bjs/run_{ctx.test.mangle}.exe'.format(ctx=ctx))
-        await self.ssh.scp('{ctx.settings.dir}/runpar_{ctx.test.mangle}.exe'.format(ctx=ctx), '{{ssh}}:bjs/runpar_{ctx.test.mangle}.exe'.format(ctx=ctx))
-        await self.ssh.run_and_wait(['cp', 'bjs/run_{mangle}.exe'.format(mangle=ctx.test.mangle), 'bjs/run_last.exe'])
+        await self.ssh.scp(
+            "{ctx.settings.dir}/run_{ctx.test.mangle}.{{ssh}}.exe".format(ctx=ctx),
+            "{{ssh}}:bjs/run_{ctx.test.mangle}.exe".format(ctx=ctx),
+        )
+        await self.ssh.scp(
+            "{ctx.settings.dir}/runpar_{ctx.test.mangle}.{{ssh}}.exe".format(ctx=ctx),
+            "{{ssh}}:bjs/runpar_{ctx.test.mangle}.exe".format(ctx=ctx),
+        )
+        # await self.ssh.run_and_wait(
+        #     [
+        #         "cp",
+        #         "bjs/run_{mangle}.exe".format(mangle=ctx.test.mangle),
+        #         "bjs/run_last.exe",
+        #     ]
+        # )
 
     async def cleanup(self, ctx):
         dir = ctx.settings.dir
-        await self.ssh.run_and_wait(['rm', 'bjs/run_{mangle}.exe'.format(mangle=ctx.test.mangle)], fail=False)
-        await self.ssh.run_and_wait(['rm', 'bjs/runpar_{mangle}.exe'.format(mangle=ctx.test.mangle)], fail=False)
+        await self.ssh.run_and_wait(
+            ["rm", "bjs/run_{mangle}.exe".format(mangle=ctx.test.mangle)], fail=False
+        )
+        await self.ssh.run_and_wait(
+            ["rm", "bjs/runpar_{mangle}.exe".format(mangle=ctx.test.mangle)], fail=False
+        )
 
     async def run(self, ctx):
         await asyncio.sleep(random.randint(0, 100) / 100)
@@ -809,77 +980,87 @@ class TestProc:
 
         try:
             if ctx.settings.once:
-                return (await self._run_once(ctx))
+                return await self._run_once(ctx)
             else:
-                return (await self._run(ctx))
+                return await self._run(ctx)
         finally:
             await self.cleanup(ctx)
 
     async def _run(self, ctx):
-        trunk = TRUNK_FMT.format(mangle_prefix=ctx.test.mangle,
-                                 lname=self.src.litmus.name,
-                                 platform=self.src.litmus.platform)
+        trunk = TRUNK_FMT.format(
+            mangle_prefix=ctx.test.mangle,
+            lname=self.src.litmus.name,
+            platform=self.src.litmus.platform,
+        )
 
         trunk_path = pathlib.Path(trunk)
         r = Result(trunk_path, self.ssh.ssh_profile)
         for _ in range(ctx.test.t):
             await self._run_iteration(ctx, r)
-        r.load()       # reload to contain all
+        r.load()  # reload to contain all
         r.dump = None  # prevent dumping again...
         return r
 
     async def _run_iteration(self, ctx, r):
         p = await self.ssh.run(
-            ['~/bjs/runpar_{mangle}.exe'.format(mangle=ctx.test.mangle),
-             "~/bjs/run_{mangle}.exe".format(mangle=ctx.test.mangle),
-             ctx.test.n,
-             ctx.test.r,
-             ctx.test.p,
+            [
+                "~/bjs/runpar_{mangle}.exe".format(mangle=ctx.test.mangle),
+                "~/bjs/run_{mangle}.exe".format(mangle=ctx.test.mangle),
+                ctx.test.n,
+                ctx.test.r,
+                ctx.test.p,
             ]
         )
 
-        async def try_read_line(msg='(unexpected end-of-stream)'):
-            x = await p.stdout.readline()
-            if x == b'':
-                raise ValueError('EOS: {}'.format(msg))
-            return x
+        with tqdm(
+            total=ctx.test.n * ctx.test.r, desc="{:>10}".format(self.ssh.ssh_profile)
+        ) as t:
+            t.bar_format = "{l_bar}{bar}| {n:,}/{total:,} [{elapsed}<{remaining}, {rate_fmt}{postfix}]"
+            # c = await try_read_line()
+            k = ctx.test.r // 10
 
-#        assert (await try_read_line()) == b'*\n', 'did not read star'
-        with tqdm(total=ctx.test.n*ctx.test.r, desc='{:>10}'.format(self.ssh.ssh_profile)) as t:
-            t.bar_format = '{l_bar}{bar}| {n:,}/{total:,} [{elapsed}<{remaining}, {rate_fmt}{postfix}]'
-            #c = await try_read_line()
-            k = (ctx.test.r//10)
-
-            stdout, stderr = await p.communicate()
+            #stdout, stderr = await p.communicate()
             j = 0
-            for line in stdout.decode('utf-8').splitlines():
-                line = line.strip()
+            while True:
+                line = await p.stdout.readline()
+                if line == b'':
+                    break
+
+                line = line.decode('utf-8').strip()
                 if not ctx.settings.quiet:
-                    print('line:', repr(line))
-                if line == '.':
+                    print("line:", repr(line))
+                if line == ".":
                     t.update(k)
                     j += 1
                 else:
                     r.parse_line(line)
-#            print('<{}>'.format(j))
+            #            print('<{}>'.format(j))
+            if not ctx.settings.quiet:
+                print("(EOF)")
             r.dump()
 
     async def _run_once(self, ctx):
         p = await self.ssh.run(
-                [('~/bjs/run_{mangle}.exe {r} {p}; echo $?'
-                    .format(mangle=ctx.test.mangle, r=ctx.test.r, p=ctx.test.p))]
-            )
+            [
+                (
+                    "~/bjs/run_{mangle}.exe {r} {p}; echo $?".format(
+                        mangle=ctx.test.mangle, r=ctx.test.r, p=ctx.test.p
+                    )
+                )
+            ]
+        )
 
-        lines = iter(p.stdout.readline, b'')
+        lines = iter(p.stdout.readline, b"")
         while True:
             line = await p.stdout.readline()
-            if line == b'':
+            if line == b"":
                 break
 
-            line = line.decode('utf-8').strip()
+            line = line.decode("utf-8").strip()
             tqdm.write(line)
 
         return None
+
 
 @attr.dataclass
 class Proc:
@@ -887,18 +1068,19 @@ class Proc:
 
     async def run(self, env=None, **kws):
         self.cmd = [str(c) for c in self.cmd]
-        fenv = ' (env: {})'.format(env) if env else ''
+        fenv = " (env: {})".format(env) if env else ""
         penv = {}
         penv.update(env or {})
         penv.update(os.environ)
-        tqdm.write('running: {}{}'.format(' '.join(self.cmd), fenv))
+        tqdm.write("running: {}{}".format(" ".join(self.cmd), fenv))
         popen = await asyncio.create_subprocess_exec(
-                    *self.cmd,
-                    stdout=asyncio.subprocess.PIPE,
-                    stderr=asyncio.subprocess.PIPE,
-                    env=penv,
-                    **kws)
-        #popen = subprocess.Popen(self.cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            *self.cmd,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+            env=penv,
+            **kws
+        )
+        # popen = subprocess.Popen(self.cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         self._popen = popen
         return popen
 
@@ -907,15 +1089,22 @@ class Proc:
         stdout, stderr = await popen.communicate()
         if popen.returncode:
             for line in stderr.splitlines():
-                print(crayons.red(line.decode('utf-8')))
+                print(crayons.red(line.decode("utf-8")))
             if fail:
-                raise ValueError('{} failed with exit-code {}'.format(self.cmd, popen.returncode))
+                raise ValueError(
+                    "{} failed with exit-code {}".format(self.cmd, popen.returncode)
+                )
             else:
-                print(crayons.red('{} failed with exit-code {}'.format(self.cmd, popen.returncode)))
+                print(
+                    crayons.red(
+                        "{} failed with exit-code {}".format(self.cmd, popen.returncode)
+                    )
+                )
 
     @property
     def stdout(self):
         return self._popen.stdout
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     main()
