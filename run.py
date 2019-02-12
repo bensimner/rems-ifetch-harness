@@ -24,7 +24,7 @@ import datetime as dt
 from tqdm import tqdm
 from typing import List, Dict
 
-CUR_DATE = dt.datetime.now().strftime("%Y-%m-%d.%H%M")
+CUR_DATE = dt.datetime.now().strftime("%Y-%m-%d")
 TRUNK_FMT = "./results/{platform}/{lname}/%s-{mangle_prefix}/" % CUR_DATE
 DEVICE_MAKE = {
     "sgs8": {
@@ -156,7 +156,7 @@ def splitctr(n):
     print(
         bitsplit(
             n,
-            *"1[res1] 1[res0] 1[dic] 1[idc] 4[cwg] 4[erg] 4[DminLine] 2[L1Ip] 10[bits] 4[IminLine]".split()
+            *"1[res1] 1[res0] 1[dic] 1[idc] 4[cwg] 4[erg] 4[DminLine] 2[L1Ip] 10[bits] 4[IminLine]".split(),
         )
     )
 
@@ -206,7 +206,7 @@ def _re_matches(regex, tname, state, lms):
 @click.argument("tests_fname")
 @click.argument("tests-dir", default="results")
 @click.option("--ls", is_flag=True)
-def results(tests_fname, tests_dir, ls):
+def checkresults(tests_fname, tests_dir, ls):
     test_dir = pathlib.Path(tests_dir)
     names = {str(f) for f in test_dir.iterdir() if f.suffix == ".lm"}
     tests = {t for (t, _) in read_tests(tests_fname)}
@@ -218,18 +218,14 @@ def results(tests_fname, tests_dir, ls):
         print(names - tests)
 
 
-@main.command("results")
-@click.argument("tests_fname")
-@click.argument("tests_re", nargs=-1)
-@click.option("--source", "-s", nargs=1, is_flag=True)
-def results(tests_fname, tests_re, source):
-    results = {}
+def get_results(tests, tests_re=[]):
     lms = {}
-    resultsdir = pathlib.Path("results")
-    expected = {}
     all_sshs = set()
+    expected = {}
+    results = {}
 
-    for (tname, state) in read_tests(tests_fname):
+    resultsdir = pathlib.Path("results")
+    for (tname, state) in tests:
         with open(tname) as lm:
             lms[tname] = litmoose.parse(lm.read(), litmus_name=tname)
 
@@ -257,7 +253,30 @@ def results(tests_fname, tests_re, source):
                     results[tname][ssh.stem] = Result.merge(results[tname][ssh.stem], r)
                 else:
                     results[tname][ssh.stem] = r
+    return results, lms, all_sshs, expected
 
+
+def get_totals(tests, all_sshs=None):
+    results, lms, allssh, expected = get_results(tests)
+    all_sshs = all_sshs if all_sshs is not None else allssh
+    totals = collections.defaultdict(int)
+    for tname, sshs in results.items():
+        counts = []
+        for ssh in sorted(all_sshs):
+            r = results[tname].get(ssh, Result(tname, ssh, {}, {}))
+            counts.append(sum(r.counts.values()))
+        totals[tname] = min(counts)
+    return totals
+
+
+@main.command("results")
+@click.argument("tests_fname")
+@click.argument("tests_re", nargs=-1)
+@click.option("--source", "-s", nargs=1, is_flag=True)
+def results(tests_fname, tests_re, source):
+    results, lms, all_sshs, expected = get_results(
+        read_tests(tests_fname), tests_re=tests_re
+    )
     for tname, sshs in results.items():
         tqdm.write("{}: (expect {})".format(tname, expected[tname]))
         for ssh in sorted(all_sshs):
@@ -293,22 +312,32 @@ def results(tests_fname, tests_re, source):
 @click.argument("f")
 @click.option("--ntimes", "-n", nargs=1, default=1)
 @click.option("--nruns", "-r", nargs=1, default=100)
-@click.option("--nspawns", "-p", nargs=1, default=10)
 @click.option("--nrepeats", "-t", nargs=1, default=1)
 @click.option("--dir", nargs=1, default="temp/")
 @click.option("--ssh", "-s", nargs=1, multiple=True, default=["sgs8"])
 @click.option("--one-shot", is_flag=True)
 @click.option("--quiet", "-q", is_flag=True)
 @click.option("--forever", is_flag=True)
-@click.option("--optimise", "-O", nargs=1, default=2)
+@click.option("--optimise", "-O", nargs=1, multiple=True)
+@click.option("--rununtil", "-u", nargs=1, default=None)
 def run(
-    f, ntimes, nruns, nspawns, nrepeats, dir, ssh, one_shot, quiet, forever, optimise
+    f, ntimes, nruns, nrepeats, dir, ssh, one_shot, quiet, forever, optimise, rununtil
 ):
+    r, n, t = nruns, ntimes, nrepeats
+    if rununtil:
+        tots = get_totals([(f, None)], all_sshs=ssh)
+        rununtil = convert_human(rununtil)
+        step = r * n
+        t = max(1, (rununtil - tots[f]) // step)
+        print(f"running {f}.")
+        print(f"running until: {rununtil:,}, tots: {tots}")
+        print(f"remaining: {rununtil-tots[f]:,}")
+
     mangle = make_mangle()
     s = Settings(quiet, False, dir, one_shot)
-    opt = Optimisations.from_level(optimise)
+    opt = Optimisations.from_opts(optimise)
     print("Running with -O{}, enabled optimisations: {}".format(optimise, str(opt)))
-    ts = TestSettings(mangle, f, nruns, ntimes, nspawns, nrepeats, "", opt)
+    ts = TestSettings(mangle, f, r, n, t, "", opt)
     t = Test(ssh)
     ctx = TestContext(s, ts)
     loop = asyncio.get_event_loop()
@@ -427,39 +456,59 @@ def print_test_outcome(f, test):
         f.write("{} : <INVALID PARAMETER>".format(tname))
 
 
+def convert_human(n):
+    mul = 1
+    if n.endswith("M"):
+        mul = 1e6
+        n = n[:-1]
+    elif n.endswith("K"):
+        mul = 1e3
+        n = n[:-1]
+
+    if n.startswith("0x"):
+        N = int(n, 16)
+    elif n.startswith("0b"):
+        N = int(n, 2)
+    elif n.startswith("0o"):
+        N = int(n, 8)
+    else:
+        N = int(n)
+
+    return int(mul * N)
+
+
 @main.command("runall")
 @click.argument("tests_fname")
 @click.option("--dir", nargs=1, default="temp/")
 @click.option("--ssh", "-s", nargs=1, multiple=True, default=["sgs8"])
 @click.option("--quiet", "-q", is_flag=True)
 @click.option("--ntimes", "-n", nargs=1, type=int, default=None)
-@click.option("--nspawns", "-p", nargs=1, type=int, default=None)
 @click.option("--nruns", "-r", nargs=1, type=int, default=None)
 @click.option("--nrepeats", "-t", nargs=1, type=int, default=None)
-@click.option("--nworkers", "-w", nargs=1, type=int, default=4)
-@click.option("--optimise", "-O", nargs=1, type=int, default=2)
+@click.option("--nworkers", "-w", nargs=1, type=int, default=1)
+@click.option("--optimise", "-O", nargs=1, multiple=True)
+@click.option("--rununtil", "-u", nargs=1, default=None)
 def runall(
-    tests_fname, dir, ssh, quiet, ntimes, nruns, nspawns, nrepeats, nworkers, optimise
+    tests_fname, dir, ssh, quiet, ntimes, nruns, nrepeats, nworkers, optimise, rununtil
 ):
     s = Settings(quiet, False, dir, False)
     t = Test(ssh)
     loop = asyncio.get_event_loop()
+    if rununtil:
+        rununtil = convert_human(rununtil)
+        print(f"running until: {rununtil:,}")
 
     Nd = {
-        "allowed": (150000, 10, 1, 1),
-        "forbidden": (550000, 10, 1, 1),
-        "forbidden?": (550000, 10, 1, 1),
-        "validated": (150000, 10, 1, 1),
+        "allowed": (150_000, 10, 1, 1),
+        "forbidden": (550_000, 10, 1, 1),
+        "forbidden?": (550_000, 10, 1, 1),
+        "validated": (150_000, 10, 1, 1),
     }
 
-    def _make_test(tname, state, tests, builds, cleanup):
-        r = nruns or Nd[state][0]
-        n = ntimes or Nd[state][1]
-        p = nspawns or Nd[state][2]
-        t = nrepeats or Nd[state][3]
+    def _make_test(tots, tname, state, tests, builds, cleanup, r, n, t):
         mangle = make_mangle()
-        opt = Optimisations.from_level(optimise)
-        ts = TestSettings(mangle, tname, r, n, p, t, "", opt)
+        opt = Optimisations.from_opts(optimise)
+        ts = TestSettings(mangle, tname, r, n, t, "", opt)
         ctx = TestContext(s, ts)
         t = Test(ssh)
         builds.append(t.build(ctx))
@@ -488,9 +537,18 @@ def runall(
         tests = []
         builds = []
         cleanup = []
-        for (tname, state) in read_tests(tests_fname):
-            _make_test(tname, state, tests, builds, cleanup)
-            print("test", tname)
+        alltests = list(read_tests(tests_fname))
+        tots = get_totals(alltests, all_sshs=ssh)
+
+        for (tname, state) in alltests:
+            r = nruns or Nd[state][0]
+            n = ntimes or Nd[state][1]
+            t = nrepeats or Nd[state][3]
+            if rununtil:
+                step = r * n
+                t = max(1, (rununtil - tots[tname]) // step)
+            _make_test(tots, tname, state, tests, builds, cleanup, r, n, t)
+            print(f"running {tname}, {r*n*t:,} times.")
 
         def cancel():
             g.cancel()
@@ -556,16 +614,30 @@ class Optimisations:
     branch_mispredict: bool = True
 
     _OPT_LEVEL_ENABLE = {
-        'indirect': 1,
-        'split_labels': 1,
-        'prefetch': 2,
-        'affinity': 1,
-        'branch_mispredict': 2,
+        "indirect": 1,
+        "split_labels": 2,
+        "prefetch": 3,
+        "affinity": 1,
+        "branch_mispredict": 3,
     }
 
     def __str__(self):
         fields = attr.fields(type(self))
         return "[{}]".format(", ".join(f.name for f in fields if getattr(self, f.name)))
+
+    @classmethod
+    def from_opts(cls, opts):
+        fields = attr.fields(cls)
+        new_fields = {}
+        for f in fields:
+            if f.name in opts:
+                new_fields[f.name] = True
+            elif "no-" + f.name in opts:
+                new_fields[f.name] = False
+        level = [i for i in opts if i.isdigit()]
+        if level:
+            return attr.evolve(cls.from_level(int(level[0])), **new_fields)
+        return cls(**new_fields)
 
     @classmethod
     def from_level(cls, level):
@@ -583,9 +655,8 @@ class Optimisations:
 class TestSettings:
     mangle: str = ""
     litmus_file: str = ""
-    r: int = 1000
-    n: int = 100
-    p: int = 100
+    r: int = 10000
+    n: int = 1
     t: int = 1
     platform: str = "aarch64"
     optimisations: Optimisations = None
@@ -733,12 +804,17 @@ class Test:
 
     async def run(self, ctx, print_out=True):
         # results = await asyncio.gather(*[self.run_ssh(ctx, ssh) for ssh in self.sshs], return_exceptions=True)
-        results = await asyncio.gather(*[self.run_ssh(ctx, ssh) for ssh in self.sshs])
+        N = ctx.test.n * ctx.test.r * ctx.test.t
+        tqdm.write(f"Running {ctx.test.litmus_file} @ {N:,} times")
+
+        results = await asyncio.gather(
+            *[self.run_ssh(ctx, ssh) for ssh in self.sshs], return_exceptions=True
+        )
 
         if print_out and not ctx.settings.once:
             self.print_results(ctx, self.sshs, results)
 
-        print([sum(r.counts.values()) for r in results])
+        print([sum(r.counts.values()) if not isinstance(r, Exception) else r for r in results])
         return self.any_validated(results)
 
     def print_results(self, ctx, sshs, results):
@@ -1002,16 +1078,17 @@ class TestProc:
         return r
 
     async def _run_iteration(self, ctx, r):
+        # p = await self.ssh.run(
+        #     [
+        #         "~/bjs/runpar_{mangle}.exe".format(mangle=ctx.test.mangle),
+        #         "~/bjs/run_{mangle}.exe".format(mangle=ctx.test.mangle),
+        #         ctx.test.n,
+        #         ctx.test.r,
+        #     ]
+        # )
         p = await self.ssh.run(
-            [
-                "~/bjs/runpar_{mangle}.exe".format(mangle=ctx.test.mangle),
-                "~/bjs/run_{mangle}.exe".format(mangle=ctx.test.mangle),
-                ctx.test.n,
-                ctx.test.r,
-                ctx.test.p,
-            ]
+            ["~/bjs/run_{mangle}.exe".format(mangle=ctx.test.mangle), ctx.test.r]
         )
-
         with tqdm(
             total=ctx.test.n * ctx.test.r, desc="{:>10}".format(self.ssh.ssh_profile)
         ) as t:
@@ -1019,14 +1096,14 @@ class TestProc:
             # c = await try_read_line()
             k = ctx.test.r // 10
 
-            #stdout, stderr = await p.communicate()
+            # stdout, stderr = await p.communicate()
             j = 0
             while True:
                 line = await p.stdout.readline()
-                if line == b'':
+                if line == b"":
                     break
 
-                line = line.decode('utf-8').strip()
+                line = line.decode("utf-8").strip()
                 if not ctx.settings.quiet:
                     print("line:", repr(line))
                 if line == ".":
@@ -1037,14 +1114,15 @@ class TestProc:
             #            print('<{}>'.format(j))
             if not ctx.settings.quiet:
                 print("(EOF)")
+            print(r.counts)
             r.dump()
 
     async def _run_once(self, ctx):
         p = await self.ssh.run(
             [
                 (
-                    "~/bjs/run_{mangle}.exe {r} {p}; echo $?".format(
-                        mangle=ctx.test.mangle, r=ctx.test.r, p=ctx.test.p
+                    "~/bjs/run_{mangle}.exe {r}; echo $?".format(
+                        mangle=ctx.test.mangle, r=ctx.test.r
                     )
                 )
             ]
@@ -1078,7 +1156,7 @@ class Proc:
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
             env=penv,
-            **kws
+            **kws,
         )
         # popen = subprocess.Popen(self.cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         self._popen = popen

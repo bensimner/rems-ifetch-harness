@@ -10,5 +10,5 @@ all_tests/AArch64/FOW.lm                    allowed
 all_tests/AArch64/WRC.F.RF+po+ctrlisb.lm    allowed
 all_tests/AArch64/WRC.F.FF+pos.lm           allowed
 all_tests/AArch64/WRC.R.RF+addrs.lm         forbidden
-all_tests/AArch64/SM+RW+RW.lm               allowed
+all_tests/AArch64/SM+RW+RW.lm               forbidden
 all_tests/AArch64/SM+RW.lm                  allowed

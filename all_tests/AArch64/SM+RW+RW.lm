@@ -26,7 +26,7 @@ P1:
     STR w2, [x1]
 
 P2:
-{w3=0, x5=1, x6=x}
+{x1=c, w3=0, x5=1, x6=x}
     LDR w3, [x1]
     EOR x4, x3, x3
     STR x5, [x6, x4]
