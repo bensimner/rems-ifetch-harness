@@ -521,9 +521,12 @@ def runall(
             tests.append((tname, r * n, state, tst.run(ctx, print_out=False)))
         cleanup.append(tst.cleanup(ctx))
 
-    async def worker(outcomes, q):
+    async def worker(outcomes, q, ntests):
+        nonlocal sofar
         while True:
+            print(f'[{sofar}/{ntests}]')
             v = await q.get()
+            sofar += 1
             if v is None:
                 break
 
@@ -542,6 +545,7 @@ def runall(
         for _ in range(nworkers):
             await q.put(None)
 
+    sofar = 0
     async def _run_all():
         tests = []
         builds = []
@@ -572,7 +576,7 @@ def runall(
 
             q = asyncio.Queue()
             outcomes = []
-            workers = [worker(outcomes, q) for _ in range(nworkers)]
+            workers = [worker(outcomes, q, len(tests)) for _ in range(nworkers)]
             g = asyncio.gather(filler(tests, q), *workers)
             await g
         except Exception as e:
@@ -1009,6 +1013,7 @@ class Result:
         with open(path) as f:
             content = json.load(f)
             self.counts.update(content)
+            self.result_cache = {k: eval(k) for k in content.keys()}
 
     @classmethod
     def from_path(cls, p):
