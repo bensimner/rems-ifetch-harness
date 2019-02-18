@@ -320,8 +320,10 @@ def results(tests_fname, tests_re, source):
 @click.option("--forever", is_flag=True)
 @click.option("--optimise", "-O", nargs=1, multiple=True)
 @click.option("--rununtil", "-u", nargs=1, default=None)
+@click.option("--rebuild/--no-rebuild", default=True)
 def run(
-    f, ntimes, nruns, nrepeats, dir, ssh, one_shot, quiet, forever, optimise, rununtil
+    f, ntimes, nruns, nrepeats, dir, ssh, one_shot, quiet, forever, optimise, rununtil,
+    rebuild
 ):
     r, n, t = nruns, ntimes, nrepeats
     if rununtil:
@@ -334,7 +336,7 @@ def run(
         print(f"remaining: {rununtil-tots[f]:,}")
 
     mangle = make_mangle()
-    s = Settings(quiet, False, dir, one_shot)
+    s = Settings(quiet, False, dir, one_shot, rebuild)
     opt = Optimisations.from_opts(optimise)
     print("Running with -O{}, enabled optimisations: {}".format(optimise, str(opt)))
     ts = TestSettings(mangle, f, r, n, t, "", opt)
@@ -342,7 +344,7 @@ def run(
     ctx = TestContext(s, ts)
     loop = asyncio.get_event_loop()
     try:
-        loop.run_until_complete(t.build(ctx))
+        loop.run_until_complete(t.setup(ctx))
         loop.run_until_complete(t.run(ctx))
     except Exception as e:
         print("E:", repr(e))
@@ -488,10 +490,12 @@ def convert_human(n):
 @click.option("--nworkers", "-w", nargs=1, type=int, default=1)
 @click.option("--optimise", "-O", nargs=1, multiple=True)
 @click.option("--rununtil", "-u", nargs=1, default=None)
+@click.option("--rebuild/--no-rebuild", default=True)
 def runall(
-    tests_fname, dir, ssh, quiet, ntimes, nruns, nrepeats, nworkers, optimise, rununtil
+    tests_fname, dir, ssh, quiet, ntimes, nruns, nrepeats, nworkers, optimise, rununtil,
+    rebuild
 ):
-    s = Settings(quiet, False, dir, False)
+    s = Settings(quiet, False, dir, False, rebuild)
     t = Test(ssh)
     loop = asyncio.get_event_loop()
     if rununtil:
@@ -516,7 +520,7 @@ def runall(
         ts = TestSettings(mangle, tname, r, n, 1, "", opt)
         ctx = TestContext(s, ts)
         tst = Test(ssh)
-        builds.append(tst.build(ctx))
+        builds.append(tst.setup(ctx))
         for _ in range(t):
             tests.append((tname, r * n, state, tst.run(ctx, print_out=False)))
         cleanup.append(tst.cleanup(ctx))
@@ -524,7 +528,7 @@ def runall(
     async def worker(outcomes, q, ntests):
         nonlocal sofar
         while True:
-            print(f'[{sofar}/{ntests}]')
+            print(f"[{sofar}/{ntests}]")
             v = await q.get()
             sofar += 1
             if v is None:
@@ -546,6 +550,7 @@ def runall(
             await q.put(None)
 
     sofar = 0
+
     async def _run_all():
         tests = []
         builds = []
@@ -681,6 +686,7 @@ class Settings:
     verbose: bool = False
     dir: str = "temp/"
     once: bool = False
+    rebuild: bool = True
 
 
 @attr.dataclass
@@ -705,7 +711,7 @@ class Test:
     sshs: List[str]
     source: LitmusSrc = None
 
-    def generate_code(self, ctx):
+    def parse_litmus(self, ctx):
         if not ctx.test.litmus_file:
             raise ValueError("Expected litmus file setting")
 
@@ -721,8 +727,9 @@ class Test:
         ctx.test.platform = litmus.platform
         self.sshs = list(set(self.sshs) & set(SSHS[litmus.platform]))
 
+    def generate_code(self, ctx):
         with open("{dir}/gen.c".format(dir=ctx.settings.dir), "w") as f:
-            f.write(litmoose.dumps(litmus, opt=ctx.test.optimisations))
+            f.write(litmoose.dumps(self.source.litmus, opt=ctx.test.optimisations))
 
         return self.make_build_ctx(ctx)
 
@@ -746,17 +753,17 @@ class Test:
             if ctx.test.platform == "aarch64":
                 env["EXT_GCC_OPTS"] = "-Wall"
 
-        await Proc(
-            ["cp", "parrun.c", "{dir}/run.c".format(dir=ctx.settings.dir)]
-        ).run_and_wait()
-        await Proc(["make"]).run_and_wait(cwd=ctx.settings.dir, env=env)
-        await Proc(
-            [
-                "cp",
-                "run.exe",
-                "runpar_{ctx.test.mangle}.{ssh}.exe".format(ctx=ctx, ssh=ssh),
-            ]
-        ).run_and_wait(cwd=ctx.settings.dir)
+        # await Proc(
+        #     ["cp", "parrun.c", "{dir}/run.c".format(dir=ctx.settings.dir)]
+        # ).run_and_wait()
+        # await Proc(["make"]).run_and_wait(cwd=ctx.settings.dir, env=env)
+        # await Proc(
+        #     [
+        #         "cp",
+        #         "run.exe",
+        #         "runpar_{ctx.test.mangle}.{ssh}.exe".format(ctx=ctx, ssh=ssh),
+        #     ]
+        # ).run_and_wait(cwd=ctx.settings.dir)
 
         await Proc(["cp", "gen.c", "run.c"]).run_and_wait(cwd=ctx.settings.dir)
         await Proc(
@@ -773,50 +780,45 @@ class Test:
             [
                 "cp",
                 "run.exe",
-                "run_{ctx.test.mangle}.{ssh}.exe".format(ctx=ctx, ssh=ssh),
+                "run_{lname}.{ssh}.exe".format(
+                    ctx=ctx, ssh=ssh, lname=self.source.litmus.name
+                ),
             ]
         ).run_and_wait(cwd=ctx.settings.dir)
-        await Proc(
-            [
-                "cp",
-                "runpar_{ctx.test.mangle}.{ssh}.exe".format(ctx=ctx, ssh=ssh),
-                "runpar_last.exe",
-            ]
-        ).run_and_wait(cwd=ctx.settings.dir)
-        await Proc(
-            [
-                "cp",
-                "run_{ctx.test.mangle}.{ssh}.exe".format(ctx=ctx, ssh=ssh),
-                "run_last.exe",
-            ]
-        ).run_and_wait(cwd=ctx.settings.dir)
+        # await Proc(
+        #     [
+        #         "cp",
+        #         "run_{ctx.test.mangle}.{ssh}.exe".format(ctx=ctx, ssh=ssh),
+        #         "run_last.exe",
+        #     ]
+        # ).run_and_wait(cwd=ctx.settings.dir)
 
     async def build(self, ctx):
         build_ctx = self.generate_code(ctx)
         self.make_build_ctx(ctx)
         env = {}
 
-        self.tprocs = {}
         for ssh in self.sshs:
             await self.build_ssh(ctx, build_ctx, ssh)
+
+    async def ssh_copy(self, ctx):
+        self.tprocs = {}
+        for ssh in self.sshs:
             ossh = Ssh(ssh)
             tproc = TestProc(ossh, self.source)
             await tproc.setup(ctx)
             self.tprocs[ssh] = tproc
 
+    async def setup(self, ctx):
+        self.parse_litmus(ctx)
+        if ctx.settings.rebuild:
+            await self.build(ctx)
+
+        await self.ssh_copy(ctx)
+
     async def cleanup(self, ctx):
         for ssh in self.sshs:
-            await self.cleanup_ssh(ctx, ssh)
             await self.tprocs[ssh].cleanup(ctx)
-
-
-    async def cleanup_ssh(self, ctx, ssh):
-        await Proc(
-            ["rm", "run_{ctx.test.mangle}.{ssh}.exe".format(ctx=ctx, ssh=ssh)]
-        ).run_and_wait(cwd=ctx.settings.dir, fail=False)
-        await Proc(
-            ["rm", "runpar_{ctx.test.mangle}.{ssh}.exe".format(ctx=ctx, ssh=ssh)]
-        ).run_and_wait(cwd=ctx.settings.dir, fail=False)
 
     async def run_ssh(self, ctx, ssh_profile):
         tproc = self.tprocs[ssh_profile]
@@ -1051,18 +1053,29 @@ class TestProc:
 
     async def setup(self, ctx):
         dir = ctx.settings.dir
+        ssh = self.ssh.ssh_profile
+        await Proc(
+            [
+                "cp",
+                "run_{lname}.{ssh}.exe".format(lname=self.src.litmus.name, ssh=ssh),
+                "run_{ctx.test.mangle}.{ssh}.exe".format(ctx=ctx, ssh=ssh),
+            ]
+        ).run_and_wait(cwd=ctx.settings.dir)
+        # await Proc(
+        #     [
+        #         "cp",
+        #         "runpar_{ctx.test.mangle}.{ssh}.exe".format(ctx=ctx, ssh=ssh),
+        #         "runpar_last.exe",
+        #     ]
+        # ).run_and_wait(cwd=ctx.settings.dir)
         await self.ssh.scp(
             "{ctx.settings.dir}/run_{ctx.test.mangle}.{{ssh}}.exe".format(ctx=ctx),
-            "{{ssh}}:bjs/run_{ctx.test.mangle}.exe".format(
-                ctx=ctx
-            ),
+            "{{ssh}}:bjs/run_{ctx.test.mangle}.exe".format(ctx=ctx),
         )
-        await self.ssh.scp(
-            "{ctx.settings.dir}/runpar_{ctx.test.mangle}.{{ssh}}.exe".format(ctx=ctx),
-            "{{ssh}}:bjs/runpar_{ctx.test.mangle}.exe".format(
-                ctx=ctx
-            ),
-        )
+        # await self.ssh.scp(
+        #     "{ctx.settings.dir}/runpar_{ctx.test.mangle}.{{ssh}}.exe".format(ctx=ctx),
+        #     "{{ssh}}:bjs/runpar_{ctx.test.mangle}.exe".format(ctx=ctx),
+        # )
         # await self.ssh.run_and_wait(
         #     [
         #         "cp",
@@ -1072,25 +1085,21 @@ class TestProc:
         # )
 
     async def cleanup(self, ctx):
+        ssh = self.ssh.ssh_profile
+        await Proc(
+            ["rm", "run_{ctx.test.mangle}.{ssh}.exe".format(ctx=ctx, ssh=ssh)]
+        ).run_and_wait(cwd=ctx.settings.dir, fail=False)
+        # await Proc(
+        #     ["rm", "runpar_{ctx.test.mangle}.{ssh}.exe".format(ctx=ctx, ssh=ssh)]
+        # ).run_and_wait(cwd=ctx.settings.dir, fail=False)
+
         dir = ctx.settings.dir
         await self.ssh.run_and_wait(
-            [
-                "rm",
-                "bjs/run_{mangle}.exe".format(
-                    mangle=ctx.test.mangle
-                ),
-            ],
-            fail=False,
+            ["rm", "bjs/run_{mangle}.exe".format(mangle=ctx.test.mangle)], fail=False
         )
-        await self.ssh.run_and_wait(
-            [
-                "rm",
-                "bjs/runpar_{mangle}.exe".format(
-                    mangle=ctx.test.mangle
-                ),
-            ],
-            fail=False,
-        )
+        # await self.ssh.run_and_wait(
+        #     ["rm", "bjs/runpar_{mangle}.exe".format(mangle=ctx.test.mangle)], fail=False
+        # )
 
     async def run(self, ctx):
         if ctx.settings.once:
@@ -1123,12 +1132,7 @@ class TestProc:
         #     ]
         # )
         p = await self.ssh.run(
-            [
-                "~/bjs/run_{mangle}.exe".format(
-                    mangle=ctx.test.mangle
-                ),
-                ctx.test.r,
-            ]
+            ["~/bjs/run_{mangle}.exe".format(mangle=ctx.test.mangle), ctx.test.r]
         )
         with tqdm(
             total=ctx.test.n * ctx.test.r, desc="{:>10}".format(self.ssh.ssh_profile)
