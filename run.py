@@ -508,12 +508,18 @@ def runall(
     def _make_test(tots, tname, state, tests, builds, cleanup, r, n, t):
         mangle = make_mangle()
         opt = Optimisations.from_opts(optimise)
-        ts = TestSettings(mangle, tname, r, n, t, "", opt)
+        print(
+            "Running {} with -O{}, enabled optimisations: {}".format(
+                tname, optimise, str(opt)
+            )
+        )
+        ts = TestSettings(mangle, tname, r, n, 1, "", opt)
         ctx = TestContext(s, ts)
-        t = Test(ssh)
-        builds.append(t.build(ctx))
-        tests.append((tname, r * n, state, t.run(ctx, print_out=False)))
-        cleanup.append(t.cleanup(ctx))
+        tst = Test(ssh)
+        builds.append(tst.build(ctx))
+        for _ in range(t):
+            tests.append((tname, r * n, state, tst.run(ctx, print_out=False)))
+        cleanup.append(tst.cleanup(ctx))
 
     async def worker(outcomes, q):
         while True:
@@ -527,6 +533,9 @@ def runall(
             outcomes.append((tname, c, state, outcome))
 
     async def filler(tests, q):
+        import random
+
+        random.shuffle(tests)  # try get distribution over devices
         for t in tests:
             await q.put(t)
 
@@ -782,12 +791,20 @@ class Test:
         build_ctx = self.generate_code(ctx)
         self.make_build_ctx(ctx)
         env = {}
+
+        self.tprocs = {}
         for ssh in self.sshs:
             await self.build_ssh(ctx, build_ctx, ssh)
+            ossh = Ssh(ssh)
+            tproc = TestProc(ossh, self.source)
+            await tproc.setup(ctx)
+            self.tprocs[ssh] = tproc
 
     async def cleanup(self, ctx):
         for ssh in self.sshs:
             await self.cleanup_ssh(ctx, ssh)
+            await self.tprocs[ssh].cleanup(ctx)
+
 
     async def cleanup_ssh(self, ctx, ssh):
         await Proc(
@@ -798,8 +815,7 @@ class Test:
         ).run_and_wait(cwd=ctx.settings.dir, fail=False)
 
     async def run_ssh(self, ctx, ssh_profile):
-        ssh = Ssh(ssh_profile)
-        tproc = TestProc(ssh, self.source)
+        tproc = self.tprocs[ssh_profile]
         return await tproc.run(ctx)
 
     async def run(self, ctx, print_out=True):
@@ -814,7 +830,12 @@ class Test:
         if print_out and not ctx.settings.once:
             self.print_results(ctx, self.sshs, results)
 
-        print([sum(r.counts.values()) if not isinstance(r, Exception) else r for r in results])
+        print(
+            [
+                sum(r.counts.values()) if not isinstance(r, Exception) else r
+                for r in results
+            ]
+        )
         return self.any_validated(results)
 
     def print_results(self, ctx, sshs, results):
@@ -1027,11 +1048,15 @@ class TestProc:
         dir = ctx.settings.dir
         await self.ssh.scp(
             "{ctx.settings.dir}/run_{ctx.test.mangle}.{{ssh}}.exe".format(ctx=ctx),
-            "{{ssh}}:bjs/run_{ctx.test.mangle}.exe".format(ctx=ctx),
+            "{{ssh}}:bjs/run_{ctx.test.mangle}.exe".format(
+                ctx=ctx
+            ),
         )
         await self.ssh.scp(
             "{ctx.settings.dir}/runpar_{ctx.test.mangle}.{{ssh}}.exe".format(ctx=ctx),
-            "{{ssh}}:bjs/runpar_{ctx.test.mangle}.exe".format(ctx=ctx),
+            "{{ssh}}:bjs/runpar_{ctx.test.mangle}.exe".format(
+                ctx=ctx
+            ),
         )
         # await self.ssh.run_and_wait(
         #     [
@@ -1044,23 +1069,29 @@ class TestProc:
     async def cleanup(self, ctx):
         dir = ctx.settings.dir
         await self.ssh.run_and_wait(
-            ["rm", "bjs/run_{mangle}.exe".format(mangle=ctx.test.mangle)], fail=False
+            [
+                "rm",
+                "bjs/run_{mangle}.exe".format(
+                    mangle=ctx.test.mangle
+                ),
+            ],
+            fail=False,
         )
         await self.ssh.run_and_wait(
-            ["rm", "bjs/runpar_{mangle}.exe".format(mangle=ctx.test.mangle)], fail=False
+            [
+                "rm",
+                "bjs/runpar_{mangle}.exe".format(
+                    mangle=ctx.test.mangle
+                ),
+            ],
+            fail=False,
         )
 
     async def run(self, ctx):
-        await asyncio.sleep(random.randint(0, 100) / 100)
-        await self.setup(ctx)
-
-        try:
-            if ctx.settings.once:
-                return await self._run_once(ctx)
-            else:
-                return await self._run(ctx)
-        finally:
-            await self.cleanup(ctx)
+        if ctx.settings.once:
+            return await self._run_once(ctx)
+        else:
+            return await self._run(ctx)
 
     async def _run(self, ctx):
         trunk = TRUNK_FMT.format(
@@ -1087,7 +1118,12 @@ class TestProc:
         #     ]
         # )
         p = await self.ssh.run(
-            ["~/bjs/run_{mangle}.exe".format(mangle=ctx.test.mangle), ctx.test.r]
+            [
+                "~/bjs/run_{mangle}.exe".format(
+                    mangle=ctx.test.mangle
+                ),
+                ctx.test.r,
+            ]
         )
         with tqdm(
             total=ctx.test.n * ctx.test.r, desc="{:>10}".format(self.ssh.ssh_profile)
