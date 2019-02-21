@@ -321,9 +321,21 @@ def results(tests_fname, tests_re, source):
 @click.option("--optimise", "-O", nargs=1, multiple=True)
 @click.option("--rununtil", "-u", nargs=1, default=None)
 @click.option("--rebuild/--no-rebuild", default=True)
+@click.option("--onlybuild/--no-onlybuild", default=False)
 def run(
-    f, ntimes, nruns, nrepeats, dir, ssh, one_shot, quiet, forever, optimise, rununtil,
-    rebuild
+    f,
+    ntimes,
+    nruns,
+    nrepeats,
+    dir,
+    ssh,
+    one_shot,
+    quiet,
+    forever,
+    optimise,
+    rununtil,
+    rebuild,
+    onlybuild,
 ):
     r, n, t = nruns, ntimes, nrepeats
     if rununtil:
@@ -345,7 +357,8 @@ def run(
     loop = asyncio.get_event_loop()
     try:
         loop.run_until_complete(t.setup(ctx))
-        loop.run_until_complete(t.run(ctx))
+        if not onlybuild:
+            loop.run_until_complete(t.run(ctx))
     except Exception as e:
         print("E:", repr(e))
         traceback.print_tb(e.__traceback__)
@@ -491,9 +504,20 @@ def convert_human(n):
 @click.option("--optimise", "-O", nargs=1, multiple=True)
 @click.option("--rununtil", "-u", nargs=1, default=None)
 @click.option("--rebuild/--no-rebuild", default=True)
+@click.option("--onlybuild/--no-onlybuild", default=False)
 def runall(
-    tests_fname, dir, ssh, quiet, ntimes, nruns, nrepeats, nworkers, optimise, rununtil,
-    rebuild
+    tests_fname,
+    dir,
+    ssh,
+    quiet,
+    ntimes,
+    nruns,
+    nrepeats,
+    nworkers,
+    optimise,
+    rununtil,
+    rebuild,
+    onlybuild,
 ):
     s = Settings(quiet, False, dir, False, rebuild)
     t = Test(ssh)
@@ -521,8 +545,9 @@ def runall(
         ctx = TestContext(s, ts)
         tst = Test(ssh)
         builds.append(tst.setup(ctx))
-        for _ in range(t):
-            tests.append((tname, r * n, state, tst.run(ctx, print_out=False)))
+        if not onlybuild:
+            for _ in range(t):
+                tests.append((tname, r * n, state, tst.run(ctx, print_out=False)))
         cleanup.append(tst.cleanup(ctx))
 
     async def worker(outcomes, q, ntests):

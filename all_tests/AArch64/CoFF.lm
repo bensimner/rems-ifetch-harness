@@ -17,4 +17,4 @@ P1:
     endf: RET
     end: NOP
 
-exists {1:x0=2, 1:x1=1}
+exists {1:x1=2, 1:x2=1}
