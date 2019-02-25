@@ -455,6 +455,39 @@ void* p{{p.name}}(void* a) {
     if (c != R)
         err(1, "p{{p.name}} not enough iterations.");
     trace("p{{p.name}}-10");
+    /* reload data at each label to leave in consistent state */
+    {% for l in p.labels -%}
+    {% if litmus.platform.name == "aarch64" -%}
+    asm volatile (
+        "adr x0, {{l}}\n"
+        "ldr w1, [%[ldata]]\n"
+        "str w1, [x0]\n"
+        "dc cvau, x0\n"
+        "dsb ish\n"
+        "ic ivau, x0\n"
+        "dsb ish\n"
+        :
+        : [ldata] "r" (ldata+{{loop.index - 1}})
+        : "x0", "w1", "memory"
+    );
+    {% elif litmus.platform.name == "ppc" -%}
+    asm volatile (
+        "lis r15, {{l}}@highest\n\t"
+        "ori r15, r15, {{l}}@higher\n\t"
+        "rldicr r15,r15,32,31\n"
+        "oris r15, r15, {{l}}@h\n\t"
+        "ori r15, r15, {{l}}@l\n\t"
+        "lwz r16, 0(%[ldata])\n"
+        "stw r16, 0(r15)\n"
+        "dcbst r0,r15\n"
+        "sync\n"
+        "icbi r0,r15\n"
+        :
+        : [ldata] "r" (ldata + {{loop.index - 1}})
+        : "memory", "r15", "r16"
+    );
+    {% endif %}
+    {% endfor %}
     strongbar();
     return NULL;
 }

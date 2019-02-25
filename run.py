@@ -288,11 +288,13 @@ def results(ctx, tests_fname, tests_re, source):
             witnesses = 0
             for (rd, c) in r.counts.items():
                 obj = r.result_cache[rd]
-                if lm_matches(obj, lms[tname]):
+                if r.witnesses is not None:
+                    witnesses += r.witnesses
+                elif lm_matches(obj, lms[tname]):
                     witnesses += c
-                    validated = True
                 # fmt = '{{{}: {:,}}}'.format(rd, c)
                 # print('\t{}: {}'.format(ssh, fmt))
+            validated = witnesses > 0
             status = get_test_status(validated, expected[tname])
             if validated:
                 tqdm.write(
@@ -309,13 +311,12 @@ def results(ctx, tests_fname, tests_re, source):
 
         print()
 
-@main.command('results_table')
+
+@main.command("results_table")
 @click.argument("tests_fname")
 @click.argument("sshes", nargs=-1)
 def results_table(tests_fname, sshes):
-    results, lms, all_sshs, expected = get_results(
-        read_tests(tests_fname)
-    )
+    results, lms, all_sshs, expected = get_results(read_tests(tests_fname))
 
     ssh_tot = {s: 0 for s in sshes}
     all_tot = 0
@@ -336,30 +337,34 @@ def results_table(tests_fname, sshes):
             witnesses = 0
             for (rd, c) in r.counts.items():
                 obj = r.result_cache[rd]
-                if lm_matches(obj, lms[tname]):
+                if r.witnesses is not None:
+                    witnesses += r.witnesses
+                elif lm_matches(obj, lms[tname]):
                     witnesses += c
-                    validated = True
             tot_witnesses += witnesses
+            validated = witnesses > 0
             status = get_test_status(validated, expected[tname])
-            if not validated and expected[tname] == 'allowed':
-                row_results.append('\\U{{{}/{}}}'.format(to_human(witnesses), to_human(count)))
+            if not validated and expected[tname] == "allowed":
+                row_results.append(
+                    "\\U{{{}/{}}}".format(to_human(witnesses), to_human(count))
+                )
             else:
-                row_results.append('{}/{}'.format(to_human(witnesses), to_human(count)))
+                row_results.append("{}/{}".format(to_human(witnesses), to_human(count)))
 
-        if tot_witnesses == 0 and expected[tname] == 'allowed':
-            row.append('\\U{{{}/{}}}'.format(to_human(tot_witnesses), to_human(tot)))
+        if tot_witnesses == 0 and expected[tname] == "allowed":
+            row.append("\\U{{{}/{}}}".format(to_human(tot_witnesses), to_human(tot)))
         else:
-            row.append('{}/{}'.format(to_human(tot_witnesses), to_human(tot)))
+            row.append("{}/{}".format(to_human(tot_witnesses), to_human(tot)))
         row.extend(row_results)
 
         all_tot += tot
 
-        print(' & '.join(row) + r' \\')
+        print(" & ".join(row) + r" \\")
 
-    print(r'\hline')
-    row = [r'\textit{Total}', '', to_human(all_tot)]
+    print(r"\hline")
+    row = [r"\textit{Total}", "", to_human(all_tot)]
     row.extend(to_human(ssh_tot[s]) for s in sshes)
-    print(' & '.join(row) + r' \\')
+    print(" & ".join(row) + r" \\")
 
 
 @main.command("run")
@@ -524,22 +529,24 @@ def print_test_outcome(f, test):
     else:
         f.write("{} : <INVALID PARAMETER>".format(tname))
 
+
 def to_human(n):
     def to_prec(k):
         for i in range(2, -1, -1):
-            ks = '{:.{i}f}'.format(k, i=i)
+            ks = "{:.{i}f}".format(k, i=i)
             if len(ks) < 4:
                 return ks
         return ks
 
     if n > 1e9:
-        return '{}G'.format(to_prec(n / 1e9))
+        return "{}G".format(to_prec(n / 1e9))
     elif n > 1e6:
-        return '{}M'.format(to_prec(n / 1e6))
+        return "{}M".format(to_prec(n / 1e6))
     elif n > 1e3:
-        return '{}K'.format(to_prec(n / 1e3))
+        return "{}K".format(to_prec(n / 1e3))
     else:
         return str(n)
+
 
 def convert_human(n):
     mul = 1
@@ -937,7 +944,9 @@ class Test:
                 for r in results
             ]
         )
-        return self.any_validated(results)
+        return any(
+            r.witnesses is not None and r.witnesses > 0 for r in results
+        ) or self.any_validated(results)
 
     def print_results(self, ctx, sshs, results):
         f = File(ctx.test.mangle, self.source.litmus)
@@ -1013,13 +1022,6 @@ class File:
         self.f.close()
 
 
-def is_validated(cnter, litmus_src):
-    for (count, obj) in cnter:
-        if lm_matches(obj, litmus_src):
-            return True
-    return False
-
-
 def lm_matches(obj, lm):
     if "error" in obj:
         return False  # assume error is never intended outcome
@@ -1064,6 +1066,7 @@ class Result:
     ssh_profile: str
     result_cache: Dict[str, Dict[str, int]] = attr.Factory(dict)
     counts: Dict[str, int] = attr.Factory(lambda: collections.defaultdict(int))
+    witnesses: int = None
 
     def blah(self):
         if not path.exists():
@@ -1081,9 +1084,12 @@ class Result:
             thing_json = json.loads(thing)
             self.result_cache[str(thing_json)] = thing_json
             self.counts[str(thing_json)] += int(n)
+        elif thing == "WITNESS":
+            print(repr(thing), repr(n))
+            self.witnesses = int(n)
 
     def dump(self):
-        old = collections.defaultdict(int)
+        old = {"witnesses": None, "data": collections.defaultdict(int)}
         path = self.trunk_path / (self.ssh_profile + ".hist")
         path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -1091,39 +1097,48 @@ class Result:
             with open(path) as f:
                 try:
                     content = json.load(f)
-                    old.update(content)
+                    if "witnesses" not in content:
+                        old["data"].update(content)
+                    else:
+                        old.update(content)
                 except json.JSONDecodeError:
                     pass
         except FileNotFoundError:
             pass
 
         for k, v in self.counts.items():
-            old[k] += v
+            old["data"][k] += v
+
+        if old["witnesses"] is None:
+            old["witnesses"] = self.witnesses
+        elif self.witnesses is not None:
+            old["witnesses"] += self.witnesses
 
         with open(path, "w") as f:
             json.dump(dict(old), f)
 
         self.counts = collections.defaultdict(int)
 
-    def load(self):
-        path = self.trunk_path / (self.ssh_profile + ".hist")
+    def load(self, path=None):
+        path = (
+            path if path is not None else self.trunk_path / (self.ssh_profile + ".hist")
+        )
         with open(path) as f:
             content = json.load(f)
-            self.counts.update(content)
-            self.result_cache = {k: eval(k) for k in content.keys()}
+            if "witnesses" not in content:
+                content = {"witnesses": None, "data": content}
+
+            data = content["data"]
+            self.witnesses = content["witnesses"]
+            self.counts.update(data)
+            self.result_cache = {k: eval(k) for k in data.keys()}
 
     @classmethod
     def from_path(cls, p):
         # p ~= /dir/to/results/aarch64/Test+Name+Thing/uniqueGenId/sshProfile.hist
         p = pathlib.Path(p)
         r = Result(p, p.stem)
-        with open(p) as f:
-            content = json.load(f)
-            r.counts = content
-        cache = {}
-        for k in r.counts:
-            cache[k] = eval(k)
-        r.result_cache = cache
+        r.load(path=p)
         return r
 
     @classmethod
