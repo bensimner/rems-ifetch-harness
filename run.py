@@ -270,13 +270,15 @@ def get_totals(tests, all_sshs=None):
 
 
 @main.command("results")
-@click.argument("tests_fname")
+@click.argument("tests_fname", default=None)
 @click.argument("tests_re", nargs=-1)
 @click.option("--source", "-s", nargs=1, is_flag=True)
-def results(tests_fname, tests_re, source):
+@click.pass_context
+def results(ctx, tests_fname, tests_re, source):
     results, lms, all_sshs, expected = get_results(
         read_tests(tests_fname), tests_re=tests_re
     )
+
     for tname, sshs in results.items():
         tqdm.write("{}: (expect {})".format(tname, expected[tname]))
         for ssh in sorted(all_sshs):
@@ -306,6 +308,58 @@ def results(tests_fname, tests_re, source):
             tqdm.write("~" * 80)
 
         print()
+
+@main.command('results_table')
+@click.argument("tests_fname")
+@click.argument("sshes", nargs=-1)
+def results_table(tests_fname, sshes):
+    results, lms, all_sshs, expected = get_results(
+        read_tests(tests_fname)
+    )
+
+    ssh_tot = {s: 0 for s in sshes}
+    all_tot = 0
+    for tname, sshs in results.items():
+        row = []
+        p = pathlib.Path(tname)
+        row.append(p.stem)
+        row.append(expected[tname])
+        row_results = []
+        tot = 0
+        tot_witnesses = 0
+        for ssh in sshes:
+            r = results[tname].get(ssh, Result(tname, ssh, {}, {}))
+            count = sum(r.counts.values())
+            ssh_tot[ssh] += count
+            tot += count
+            validated = False
+            witnesses = 0
+            for (rd, c) in r.counts.items():
+                obj = r.result_cache[rd]
+                if lm_matches(obj, lms[tname]):
+                    witnesses += c
+                    validated = True
+            tot_witnesses += witnesses
+            status = get_test_status(validated, expected[tname])
+            if not validated and expected[tname] == 'allowed':
+                row_results.append('\\U{{{}/{}}}'.format(to_human(witnesses), to_human(count)))
+            else:
+                row_results.append('{}/{}'.format(to_human(witnesses), to_human(count)))
+
+        if tot_witnesses == 0 and expected[tname] == 'allowed':
+            row.append('\\U{{{}/{}}}'.format(to_human(tot_witnesses), to_human(tot)))
+        else:
+            row.append('{}/{}'.format(to_human(tot_witnesses), to_human(tot)))
+        row.extend(row_results)
+
+        all_tot += tot
+
+        print(' & '.join(row) + r' \\')
+
+    print(r'\hline')
+    row = [r'\textit{Total}', '', to_human(all_tot)]
+    row.extend(to_human(ssh_tot[s]) for s in sshes)
+    print(' & '.join(row) + r' \\')
 
 
 @main.command("run")
@@ -470,6 +524,22 @@ def print_test_outcome(f, test):
     else:
         f.write("{} : <INVALID PARAMETER>".format(tname))
 
+def to_human(n):
+    def to_prec(k):
+        for i in range(2, -1, -1):
+            ks = '{:.{i}f}'.format(k, i=i)
+            if len(ks) < 4:
+                return ks
+        return ks
+
+    if n > 1e9:
+        return '{}G'.format(to_prec(n / 1e9))
+    elif n > 1e6:
+        return '{}M'.format(to_prec(n / 1e6))
+    elif n > 1e3:
+        return '{}K'.format(to_prec(n / 1e3))
+    else:
+        return str(n)
 
 def convert_human(n):
     mul = 1
