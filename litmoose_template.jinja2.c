@@ -632,6 +632,22 @@ int validate_results(struct Arg* arg) {
         {% for r in litmus.out_registers -%}
         {{r.type_syn}} {{r.var_name}} = *arg->results[n].{{r.var_name}};
         {% endfor -%}
+
+        {% for l in litmus.all_labels -%}
+        uint32_t lbl_{{l}};
+        {% if litmus.platform.name == "aarch64" -%}
+        asm volatile("adr x0, {{l}}\nldr %[data], [x0]\n" : [data] "=r" (lbl_{{l}}) : : "x0", "memory");
+        {% elif litmus.platform.name == "ppc" -%}
+        asm volatile (
+            "lis r15, {{l}}@highest\n\t"
+            "ori r15, r15, {{l}}@higher\n\t"
+            "rldicr r15,r15,32,31\n"
+            "oris r15, r15, {{l}}@h\n\t"
+            "ori r15, r15, {{l}}@l\n\t"
+            "lwz %[data], 0(r15)\n"
+            : [data] "=r" (lbl_{{l}}) : : "r15", "memory");
+        {% endif %}
+        {% endfor -%}
         {{litmus.post_state.to_switch()}}
     }
     return witnesses;

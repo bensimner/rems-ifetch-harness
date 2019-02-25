@@ -42,18 +42,17 @@ def W(register, processor):
     return Register(register, processor, 32)
 
 
-class RegisterValueType(enum.Enum):
-    INTEGER = 0
-    MEM = 1
-    INITIAL = 2
-    LABEL = 2
+class OpType(enum.Enum):
+    EQ = 0
+    NE = 1
 
 
 @attr.dataclass
 class RegisterState:
     register: Register
-    value_type: RegisterValueType
+    value_type: ll.RegisterValueType
     value: Union[int, Mem]
+    op: OpType = OpType.EQ
 
     def _value_to_ll(self, labels=[]):
         if isinstance(self.value, (int, str)):
@@ -64,6 +63,7 @@ class RegisterState:
         return ll.RegisterState(
             register=self.register.to_ll(platform, proc),
             value=self._value_to_ll(plabels),
+            value_type=self.value_type,
         )
 
     def to_ll_inp(self, platform, proc, outs, plabels):
@@ -89,7 +89,11 @@ class State:
 
     def to_ll(self, platform, plabels):
         ll_rs = [
-            ll.RegisterState(rs.register.to_ll(platform), rs._value_to_ll(plabels))
+            ll.RegisterState(
+                register=rs.register.to_ll(platform),
+                value=rs._value_to_ll(plabels),
+                value_type=rs.value_type,
+            )
             for rs in self.registers
         ]
         return ll.PostState(ll_rs)
@@ -244,13 +248,13 @@ class Parser:
             op, _, _ = t.partition('"')
             if op == "nop":
                 if self.platform == "aarch64":
-                    return RegisterValueType.INTEGER, 3_573_751_839  # NOP
+                    return ll.RegisterValueType.INTEGER, 3_573_751_839  # NOP
                 elif self.platform == "ppc":
-                    return RegisterValueType.INTEGER, t0x60000000
+                    return ll.RegisterValueType.INTEGER, t0x60000000
             elif op == "nop2":
                 if self.platform == "aarch64":
                     return (
-                        RegisterValueType.INTEGER,
+                        ll.RegisterValueType.INTEGER,
                         0b11010101000000110010_0000110_11111,
                     )
                 elif self.platform == "ppc":
@@ -258,7 +262,7 @@ class Parser:
             elif op == "nop3":
                 if self.platform == "aarch64":
                     return (
-                        RegisterValueType.INTEGER,
+                        ll.RegisterValueType.INTEGER,
                         0b11010101000000110010_0000111_11111,
                     )
                 elif self.platform == "ppc":
@@ -267,31 +271,36 @@ class Parser:
             raise ValueError("Unknown opcode: {}".format(op))
         try:
             if v.startswith("0x"):
-                return RegisterValueType.INTEGER, int(v, 16)
+                return ll.RegisterValueType.INTEGER, int(v, 16)
             if v.startswith("0b"):
-                return RegisterValueType.INTEGER, int(v, 2)
+                return ll.RegisterValueType.INTEGER, int(v, 2)
             if v.startswith("0o"):
-                return RegisterValueType.INTEGER, int(v, 8)
-            return RegisterValueType.INTEGER, int(v)
+                return ll.RegisterValueType.INTEGER, int(v, 8)
+            return ll.RegisterValueType.INTEGER, int(v)
         except ValueError:
             # assume mem
-            return RegisterValueType.MEM, self.parse_mem_ref(v)
+            return ll.RegisterValueType.MEM, self.parse_mem_ref(v)
 
     def parse_state(self, state, implicit_process=None):
         regs = []
         if state:
             groups = state.split(",")
-            pairs = [g.split("=") for g in groups]
-            for (reg, value) in pairs:
+            for g in groups:
+                reg, op, value = g.partition("!=")
+                if not op:
+                    reg, op, value = g.partition("=")
+                op = OpType.EQ if op == "=" else OpType.NE
+
                 reg = reg.strip()
                 value = value.strip()
-                s = re.fullmatch(r"Initial\[(?P<loc>.+)\]", value)
+                s = re.fullmatch(r"initial\[(?P<loc>.+)\]", value)
                 if s:
                     regs.append(
                         RegisterState(
                             self.parse_reg(reg, implicit_process=implicit_process),
-                            RegisterValueType.INITIAL,
+                            ll.RegisterValueType.INITIAL,
                             s.group("loc"),
+                            op,
                         )
                     )
                 else:
@@ -301,6 +310,7 @@ class Parser:
                             self.parse_reg(reg, implicit_process=implicit_process),
                             ty,
                             val,
+                            op,
                         )
                     )
         return State(regs)

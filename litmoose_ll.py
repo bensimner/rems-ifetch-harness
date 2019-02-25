@@ -1,6 +1,8 @@
 import attr
+import enum
 import jinja2
 from typing import List, Union, Dict
+
 
 @attr.dataclass(frozen=True)
 class Platform:
@@ -11,14 +13,12 @@ class Platform:
     def format_register(self, r):
         return self.fmt_register(r)
 
-ARMv8 = Platform('aarch64',
-                 'dsb sy',
-                 lambda r: ('x' if r.size == 64 else 'w') + str(r.register),
-        )
-PPC = Platform('ppc',
-               'sync',
-                lambda r: 'r' + str(r.register),
-        )
+
+ARMv8 = Platform(
+    "aarch64", "dsb sy", lambda r: ("x" if r.size == 64 else "w") + str(r.register)
+)
+PPC = Platform("ppc", "sync", lambda r: "r" + str(r.register))
+
 
 @attr.dataclass(frozen=True)
 class Mem:
@@ -26,7 +26,7 @@ class Mem:
 
     @property
     def name(self):
-        return 'm' + str(self.loc)
+        return "m" + str(self.loc)
 
     @property
     def var(self):
@@ -34,11 +34,13 @@ class Mem:
 
     @property
     def type_syn(self):
-        return 'int64_t* '
+        return "int64_t* "
+
 
 @attr.dataclass(frozen=True)
 class Label:
     name: str
+
 
 @attr.dataclass(frozen=True)
 class PPCRegister:
@@ -48,23 +50,24 @@ class PPCRegister:
 
     @property
     def name(self):
-        return 'r' + str(self.register)
+        return "r" + str(self.register)
 
     @property
     def var_name(self):
-        return 'p{}r{}'.format(self.processor, self.register)
+        return "p{}r{}".format(self.processor, self.register)
 
     @property
     def reg_var(self):
-        return '%[{}]'.format(self.var_name)
+        return "%[{}]".format(self.var_name)
 
     @property
     def type_syn(self):
-        return ('uint{}_t'.format(self.size))
+        return "uint{}_t".format(self.size)
 
     @property
     def type_fmt(self):
-        return ('lu' if self.size == 64 else 'u')
+        return "lu" if self.size == 64 else "u"
+
 
 @attr.dataclass(frozen=True)
 class AArch64Register:
@@ -74,53 +77,66 @@ class AArch64Register:
 
     @property
     def name(self):
-        reg_prefix = ('x' if self.size == 64 else 'w')
+        reg_prefix = "x" if self.size == 64 else "w"
         return reg_prefix + str(self.register)
 
     @property
     def var_name(self):
-        reg_prefix = ('x' if self.size == 64 else 'w')
-        return 'p{}{}{}'.format(self.processor, reg_prefix, self.register)
+        reg_prefix = "x" if self.size == 64 else "w"
+        return "p{}{}{}".format(self.processor, reg_prefix, self.register)
 
     @property
     def reg_var(self):
-        prefix = '' if self.size == 64 else 'w'
-        return '%{}[{}]'.format(prefix, self.var_name)
+        prefix = "" if self.size == 64 else "w"
+        return "%{}[{}]".format(prefix, self.var_name)
 
     @property
     def type_syn(self):
-        return 'uint{}_t'.format(self.size)
+        return "uint{}_t".format(self.size)
 
     @property
     def type_fmt(self):
-        return ('lu' if self.size == 64 else 'u')
+        return "lu" if self.size == 64 else "u"
 
 
 def Register(platform, p, r, size):
-    if platform == 'aarch64':
+    if platform == "aarch64":
         return AArch64Register(p, r, size)
-    elif platform == 'ppc':
+    elif platform == "ppc":
         return PPCRegister(p, r, size)
 
-    raise ValueError('Register({}, {}, {}, {}): unknown Platform'.format(platform, r, p, size))
+    raise ValueError(
+        "Register({}, {}, {}, {}): unknown Platform".format(platform, r, p, size)
+    )
+
+
+class RegisterValueType(enum.Enum):
+    INTEGER = 0
+    MEM = 1
+    INITIAL = 2
+    LABEL = 2
 
 
 @attr.dataclass(frozen=True)
 class RegisterState:
     register: Register
     value: int
+    value_type: RegisterValueType
 
     def to_switch(self):
-        assert isinstance(self.value, int)
+        v = self.value
+        if self.value_type == RegisterValueType.INITIAL:
+            v = f"lbl_{v}"
+
         return """
-        switch (%s) {
-            case (%s) :
-                %s
-                break;
-            default :
-                break;
+        if (%s == %s) {
+            %s
         }
-        """ % (self.register.var_name, self.value, '%s')
+        """ % (
+            self.register.var_name,
+            v,
+            "%s",
+        )
 
 
 @attr.dataclass
@@ -128,10 +144,11 @@ class PostState:
     register_states: List[RegisterState]
 
     def to_switch(self):
-        x = '%s'
+        x = "%s"
         for rs in self.register_states:
             x = x % rs.to_switch()
-        return x % 'witnesses++;'
+        return x % "witnesses++;"
+
 
 @attr.dataclass(frozen=True)
 class RegisterInputState:
@@ -139,12 +156,15 @@ class RegisterInputState:
     value: int
     output: bool = False  # whether this input register is also an output register
 
+
 @attr.dataclass
 class MemState:
     mem: Mem
     value: int
 
+
 Code = str
+
 
 @attr.dataclass
 class Chunk:
@@ -162,6 +182,7 @@ class Chunk:
     @property
     def all_registers(self):
         return set(self.out_registers) | {rs.register for rs in self.in_registers}
+
 
 @attr.dataclass
 class Process:
@@ -203,3 +224,7 @@ class Litmus:
     out_registers: List[Register]
     post_state: PostState
     platform: Platform
+
+    @property
+    def all_labels(self):
+        return [l for p in self.processes for l in p.labels]
