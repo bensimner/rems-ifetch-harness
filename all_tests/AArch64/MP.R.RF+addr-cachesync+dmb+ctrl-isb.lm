@@ -1,0 +1,38 @@
+initial {mem[y]=0, mem[z]=0}
+
+// 335544321 = "B +1"
+// 335544323 = "B +3"
+
+P0:
+{x0=0, x1=z, w2=335544321, x3=L8, x5=1, x6=y}
+    L1: LDR x0, [x1]
+    L2: STR w2, [x3]
+    EOR x4, x0, x0
+    ADD x4, x4, x3
+    DC CVAU, x4
+    DSB ISH
+    IC IVAU, x3
+    DSB ISH
+    L3: STR x5, [x6]
+
+P1:
+{w0=0, w1=335544323, x2=L8, x3=1, x4=z}
+    L4: LDR w0, [x2]
+    L5: STR w1, [x2]
+    DMB ST
+    L6: STR x3, [x4]
+
+P2:
+{x0=0, x1=y, x2=0}
+    L7: LDR x0, [x1]
+    CBZ x0, LC00
+    LC00: ISB
+    L8: B fail_L8
+    mov x2, #2
+    b end
+    mov x2, #3
+    b end
+    fail_L8: mov x2, #1
+    end: nop
+
+exists {0:x0=1, 1:w0=335544321, 2:x0=1, 2:x2=2}
