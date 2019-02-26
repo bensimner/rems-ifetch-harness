@@ -1,4 +1,5 @@
 all_tests/AArch64/CoFF.lm                                   allowed
+all_tests/AArch64/CoFF-isb.lm                               allowed
 all_tests/AArch64/CoFR.lm                                   forbidden
 all_tests/AArch64/CoRF+ctrlisb.lm                           allowed
 all_tests/AArch64/MP.FF+dmb+po.lm                           allowed

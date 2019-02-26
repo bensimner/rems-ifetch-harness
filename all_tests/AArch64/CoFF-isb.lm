@@ -1,0 +1,21 @@
+P0:
+{w0="NOP", x1=f}
+    STR w0, [x1]
+
+P1:
+{x0=0, x1=0, x2=0}
+    BL f
+    ISB
+    mov x1, x0
+    mov x0, #0
+    BL f
+    mov x2, x0
+    B end
+    f: B overf
+    mov x0, #2
+    b endf
+    overf: mov x0, #1
+    endf: RET
+    end: NOP
+
+exists {1:x1=2, 1:x2=1}
