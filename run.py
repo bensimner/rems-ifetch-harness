@@ -1100,7 +1100,8 @@ class Result:
                     if "witnesses" not in content:
                         old["data"].update(content)
                     else:
-                        old.update(content)
+                        old["witnesses"] = content["witnesses"]
+                        old["data"].update(content["data"])
                 except json.JSONDecodeError:
                     pass
         except FileNotFoundError:
